@@ -1,4 +1,5 @@
 import { canvasPages, samePages } from '../shared/pages.ts'
+import { FIRST_CANVAS_PATH } from '../shared/firstCanvas.ts'
 import { localAgentRouter, handleLocalAgentMcp } from './localAgent.ts'
 import { handleGeminiCloudMcp } from './geminiCloudMcp.ts'
 import { geminiCloudWorkerFor } from './geminiCloudRuns.ts'
@@ -511,6 +512,19 @@ app.all('/gemini-cloud/mcp/:id', (req, res, next) => {
 })
 app.all('/local-agent/mcp/:id', (req, res, next) => {
   handleLocalAgentMcp(req, res).catch(next)
+})
+
+/* Where a brand-new account lands: the canvas signup created for it
+   (server/auth.ts databaseHooks), where the demo agent is waiting to
+   perform. better-auth sends new Google / Microsoft / SSO users here as
+   their newUserCallbackURL and the email form comes here too, so every
+   signup path shares one landing. Signed out, or without a canvas of their
+   own any more, the dashboard will do. Ahead of the /api session guard:
+   a browser arrives here, so a missing session is a redirect, not a 401. */
+app.get(FIRST_CANVAS_PATH, async (req, res) => {
+  const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) }).catch(() => null)
+  const canvas = session && store.firstCanvasOf(session.user.id)
+  res.redirect(canvas ? `/c/${canvas.id}` : '/')
 })
 
 /* Public: does an account exist for this email? Drives the login page's
