@@ -159,8 +159,20 @@ final class CanvasModel: ObservableObject {
         catch { self.error = error.localizedDescription; canvas = try? await client.get("/api/canvases/\(id)") }
     }
 
-    func queue(_ prompt: String) async throws {
-        _ = try await client.data("/api/canvases/\(id)/cards", method: "POST", body: ["title": prompt])
+    /// The selection as the next prompt's scope: the picked element when it still
+    /// matches the frame's HTML, else the selected frame, else nothing.
+    var promptScope: PromptScope? {
+        guard let frame = selected else { return nil }
+        if let element = selectedElement, element.frameID == frame.id, element.htmlHash == frame.html.hashValue {
+            return PromptScope(scope: CardScope(frameId: frame.id, selector: element.selector), label: element.label, frameName: frame.name)
+        }
+        return PromptScope(scope: CardScope(frameId: frame.id), label: frame.name, frameName: frame.name)
+    }
+
+    func queue(_ prompt: String, scope: CardScope? = nil) async throws {
+        var body: [String: Any] = ["title": prompt]
+        if let scope { body["scope"] = scope.body }
+        _ = try await client.data("/api/canvases/\(id)/cards", method: "POST", body: body)
     }
 
     /// A comment pinned to an element when one is selected, else to the frame body.
@@ -186,6 +198,18 @@ final class CanvasModel: ObservableObject {
         canvas?.frames.removeAll { $0.id == frameID }
         select(nil)
     }
+}
+
+/// The selection a prompt is scoped to, as the prompt bar's chip shows it.
+struct PromptScope: Equatable {
+    var scope: CardScope
+    /// What the chip reads: an element's `tag#id.class`, a frame's name.
+    var label: String
+    var frameName: String
+    var isElement: Bool { scope.selector != nil }
+    /// "frame:selector" for an element, the frame id alone for a frame — the key a
+    /// dismissal is remembered by, so a new selection brings the chip back.
+    var key: String { scope.selector.map { "\(scope.frameId):\($0)" } ?? scope.frameId }
 }
 
 /// An element picked inside a frame by the Blitz hit test.

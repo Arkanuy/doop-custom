@@ -57,6 +57,13 @@ HTML/CSS engine (Stylo + Taffy + Parley), compiled into the app as a static libr
   tests the Blitz DOM. The chip shows `tag#id.class` and the element's text, the
   outline shows its box, and Comment posts an element-anchored comment with the
   same `tag:nth-of-type(n)` selector path the web editor and agents use.
+- **Scoped prompts**: as on the web, the selection is the prompt bar's scope. A
+  chip names the selected frame, or the picked element inside it, and the task is
+  queued with that `scope` so the agent edits it in place; the chip's × asks about
+  the whole canvas instead until something else is selected.
+- **Canvas paper**: the board behind the frames is the `CanvasPaper` colour set in
+  `Assets.xcassets`, warm paper in light mode and a charcoal (not black) in dark
+  mode so frame edges, labels and cursors stay readable.
 
 The main app uses the existing backend APIs. Live Activity background updates require
 the server additions and Apple push configuration described below. Use Doop Cloud or an
