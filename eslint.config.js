@@ -39,6 +39,22 @@ export default tseslint.config(
     },
   },
   {
+    /* every environment variable is declared once in server/env.ts, typed and
+       validated at boot; the rest of the server reads `env.X` from there. The
+       Gemini cloud worker is its own process with its own three variables. */
+    files: ['server/**/*.ts'],
+    ignores: ['server/env.ts', 'server/geminiCloudWorker.ts', 'server/geminiCloudWorkerMain.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.name='process'][property.name='env']",
+          message: 'Read environment variables through `env` from server/env.ts, which validates them at boot.',
+        },
+      ],
+    },
+  },
+  {
     /* repo maintenance scripts and the iOS dev helpers: plain ESM run directly
        by node, so they get node globals rather than the browser set */
     files: ['scripts/**/*.{js,mjs}', 'ios/scripts/**/*.{js,mjs}'],

@@ -1,3 +1,4 @@
+import { env } from './env.ts'
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { eq, inArray, or, isNull, ne, and, sql } from 'drizzle-orm'
@@ -16,9 +17,6 @@ import { purgeUserData } from './accountDeletion.ts'
  * the MCP OAuth plugin (agent identity) lands on top of this instance later.
  */
 
-/** The canonical public origin: OAuth authorize/token/login URLs live here. */
-export const PUBLIC_ORIGIN = process.env.BETTER_AUTH_URL || 'http://localhost:4300'
-
 /**
  * Who gets the admin role, by email. Ids can't do this job: on a fresh
  * deploy nobody has an id until they sign up, which would mean a redeploy
@@ -29,16 +27,10 @@ export const PUBLIC_ORIGIN = process.env.BETTER_AUTH_URL || 'http://localhost:43
  * Deliberately one-way: dropping an email here does not demote anyone.
  * Demotion is an explicit setRole, so there's an actor behind it.
  */
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean)
+const ADMIN_EMAILS = env.ADMIN_EMAILS.map((s) => s.toLowerCase())
 
 /** Empty means public signup; otherwise only exact email domains may register. */
-const SIGNUP_EMAIL_DOMAINS = (process.env.SIGNUP_EMAIL_DOMAINS || '')
-  .split(',')
-  .map((s) => s.trim().toLowerCase().replace(/^@/, ''))
-  .filter(Boolean)
+const SIGNUP_EMAIL_DOMAINS = env.SIGNUP_EMAIL_DOMAINS.map((s) => s.toLowerCase().replace(/^@/, '')).filter(Boolean)
 
 /**
  * Whether an unverified account may sign in. Set REQUIRE_EMAIL_VERIFICATION
@@ -50,7 +42,7 @@ const SIGNUP_EMAIL_DOMAINS = (process.env.SIGNUP_EMAIL_DOMAINS || '')
  * rather than absent, which keeps the ADMIN_EMAILS path below intact. An
  * admin-to-be clicks the link once; nobody else has to.
  */
-const REQUIRE_VERIFICATION = mailerConfigured && process.env.REQUIRE_EMAIL_VERIFICATION !== 'false'
+const REQUIRE_VERIFICATION = mailerConfigured && env.REQUIRE_EMAIL_VERIFICATION
 
 /**
  * An email address only identifies someone once they have PROVEN they own it.
@@ -64,7 +56,7 @@ function mayPromote(user: { email: string; emailVerified: boolean }): boolean {
   if (!ADMIN_EMAILS.includes(user.email.toLowerCase())) return false
   if (user.emailVerified) return true
   if (mailerConfigured) return false // verification is possible — wait for it
-  return process.env.NODE_ENV !== 'production'
+  return !env.isProduction
 }
 
 async function promote(userId: string, email: string): Promise<void> {
@@ -75,7 +67,7 @@ async function promote(userId: string, email: string): Promise<void> {
 /** Promote listed users who already exist. Idempotent; runs at boot. */
 export async function syncAdmins(): Promise<void> {
   if (!ADMIN_EMAILS.length) return
-  if (!mailerConfigured && process.env.NODE_ENV === 'production') {
+  if (!mailerConfigured && env.isProduction) {
     console.warn(
       '⚠ ADMIN_EMAILS is set but no SMTP is configured, so email ownership cannot be verified and nobody will be promoted. Configure SMTP_HOST, or set the admin role directly in the database.',
     )
@@ -121,7 +113,7 @@ interface OidcConfig {
  * running with SSO half-on.
  */
 export function loadOidcConfig(): OidcConfig | null {
-  const { OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_SCOPES, OIDC_PROVIDER_NAME } = process.env
+  const { OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_SCOPES, OIDC_PROVIDER_NAME } = env
   const setCount = [OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET].filter(Boolean).length
   if (setCount === 0) return null
   if (setCount < 3) {
@@ -154,8 +146,8 @@ interface OAuthClient {
  * rather than showing a button that can never complete.
  */
 function loadOAuthClient(prefix: 'GOOGLE' | 'MICROSOFT', label: string): OAuthClient | null {
-  const clientId = process.env[`${prefix}_CLIENT_ID`]
-  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`]
+  const clientId = env[`${prefix}_CLIENT_ID`]
+  const clientSecret = env[`${prefix}_CLIENT_SECRET`]
   const setCount = [clientId, clientSecret].filter(Boolean).length
   if (setCount === 0) return null
   if (setCount < 2) {
@@ -182,7 +174,7 @@ interface MicrosoftConfig extends OAuthClient {
  */
 export function loadMicrosoftConfig(): MicrosoftConfig | null {
   const client = loadOAuthClient('MICROSOFT', 'Microsoft')
-  return client && { ...client, tenantId: process.env.MICROSOFT_TENANT_ID || 'common' }
+  return client && { ...client, tenantId: env.MICROSOFT_TENANT_ID }
 }
 
 /** Everything the login page needs to render its provider buttons. Never a secret. */
@@ -277,22 +269,18 @@ function buildAuth() {
   const oidc = loadOidcConfig()
   const google = loadGoogleConfig()
   const microsoft = loadMicrosoftConfig()
-  if (!process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV === 'production') {
-    throw new Error('BETTER_AUTH_SECRET must be set in production')
-  }
-  const prod = process.env.NODE_ENV === 'production'
-  if (prod && !process.env.BETTER_AUTH_URL) {
-    throw new Error('BETTER_AUTH_URL (the public origin, e.g. https://doop.app) must be set in production')
-  }
+  /* BETTER_AUTH_SECRET and BETTER_AUTH_URL are required in production; a
+     missing one fails at boot in server/env.ts */
+  const prod = env.isProduction
   return betterAuth({
     /* the public origin — OAuth discovery/authorize/token URLs are built on
        it, so in dev it must be the web port that proxies /api and /mcp */
-    baseURL: PUBLIC_ORIGIN,
-    secret: process.env.BETTER_AUTH_SECRET || 'doop-dev-secret-not-for-production',
+    baseURL: env.BETTER_AUTH_URL,
+    secret: env.BETTER_AUTH_SECRET,
     /* prod: the public origin, plus any extras from env. dev: trust whichever
        origin the request came from (localhost, 127.0.0.1, LAN IP — all fine). */
     trustedOrigins: prod
-      ? [PUBLIC_ORIGIN, ...(process.env.TRUSTED_ORIGINS || '').split(',').filter(Boolean)]
+      ? [env.BETTER_AUTH_URL, ...env.TRUSTED_ORIGINS]
       : (request) => {
           const origin = request?.headers.get('origin')
           return origin ? [origin] : []
@@ -389,7 +377,7 @@ function buildAuth() {
                address at face value — production refuses such invites up
                front (workspaces.unknownEmailInvitesAllowed), the line
                ADMIN_EMAILS draws too */
-            if (!mailerConfigured && process.env.NODE_ENV !== 'production') await acceptInvites(user.id, user.email)
+            if (!mailerConfigured && !env.isProduction) await acceptInvites(user.id, user.email)
           },
         },
       },

@@ -1,3 +1,4 @@
+import { env } from './env.ts'
 import { canvasPages, samePages } from '../shared/pages.ts'
 import { FIRST_CANVAS_PATH } from '../shared/firstCanvas.ts'
 import { localAgentRouter, handleLocalAgentMcp } from './localAgent.ts'
@@ -22,7 +23,7 @@ import { notificationsRouter } from './notifications.ts'
 import * as webhooks from './webhooks.ts'
 import { webhooksRouter } from './webhookRoutes.ts'
 import { canAccessCanvas, canManageCanvas, hasDurableCanvasAccess, isAdmin } from './access.ts'
-import { auth, initAuth, syncAdmins, getUserName, PUBLIC_ORIGIN, loginProvidersConfig } from './auth.ts'
+import { auth, initAuth, syncAdmins, getUserName, loginProvidersConfig } from './auth.ts'
 import { adminRouter } from './admin.ts'
 import { communityRouter, parseListing, publishableFrames } from './community.ts'
 import { automationsRouter, startScheduler } from './automations.ts'
@@ -66,7 +67,7 @@ import { colorFor } from '../shared/types.ts'
 import { isPeerViewport } from '../shared/viewport.ts'
 import type { ClientMessage, Presence, ServerMessage } from '../shared/types.ts'
 
-const PORT = Number(process.env.PORT || 4400)
+const PORT = env.PORT
 
 /* Identifies the client bundle this process serves. Hashing dist/index.html
    works because Vite writes hashed asset names into it — any frontend change
@@ -269,8 +270,8 @@ app.get('/healthz', (_req, res) => res.json({ ok: true }))
 /* must not leak to a third party.                                     */
 /* ------------------------------------------------------------------ */
 
-const PH_INGEST = process.env.POSTHOG_INGEST_HOST || 'https://us.i.posthog.com'
-const PH_ASSETS = process.env.POSTHOG_ASSETS_HOST || 'https://us-assets.i.posthog.com'
+const PH_INGEST = env.POSTHOG_INGEST_HOST
+const PH_ASSETS = env.POSTHOG_ASSETS_HOST
 const PH_DROP_HEADERS = new Set(['host', 'connection', 'cookie', 'content-length', 'accept-encoding'])
 
 app.use('/relay', async (req, res) => {
@@ -451,7 +452,7 @@ app.put('/u/:token', async (req, res) => {
       uploadedBy: ticket.uploadedBy,
     })
     success = true
-    const url = `${PUBLIC_ORIGIN}/a/${asset.id}.${asset.ext}`
+    const url = `${env.BETTER_AUTH_URL}/a/${asset.id}.${asset.ext}`
     res.json({
       ok: true,
       url,
@@ -1399,7 +1400,7 @@ app.post(
       })
       /* absolute like the MCP flow: frame HTML renders inside sandboxed
          srcdoc iframes where root-relative URLs don't resolve */
-      res.json({ url: `${PUBLIC_ORIGIN}/a/${asset.id}.${asset.ext}`, mime: asset.mime, size: asset.size })
+      res.json({ url: `${env.BETTER_AUTH_URL}/a/${asset.id}.${asset.ext}`, mime: asset.mime, size: asset.size })
     } catch (e) {
       res.status(400).json({ error: e instanceof Error ? e.message : 'upload failed' })
     }
@@ -1802,8 +1803,8 @@ app.get('/.well-known/oauth-authorization-server', (req, res) => bridge(oAuthDis
 function protectedResourceMetadata(req: express.Request, res: express.Response) {
   res.json({
     resource: `${req.protocol}://${req.get('host')}/mcp`,
-    authorization_servers: [PUBLIC_ORIGIN],
-    jwks_uri: `${PUBLIC_ORIGIN}/api/auth/mcp/jwks`,
+    authorization_servers: [env.BETTER_AUTH_URL],
+    jwks_uri: `${env.BETTER_AUTH_URL}/api/auth/mcp/jwks`,
     scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
     bearer_methods_supported: ['header'],
     resource_signing_alg_values_supported: ['RS256'],
@@ -1817,18 +1818,18 @@ app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata)
 app.get('/robots.txt', (_req, res) => {
   res
     .type('text/plain')
-    .send(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /c/\n\nSitemap: ${PUBLIC_ORIGIN}/sitemap.xml\n`)
+    .send(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /c/\n\nSitemap: ${env.BETTER_AUTH_URL}/sitemap.xml\n`)
 })
 app.get('/sitemap.xml', (_req, res) => {
   res
     .type('application/xml')
     .send(
-      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${PUBLIC_ORIGIN}/</loc></url>\n</urlset>\n`,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${env.BETTER_AUTH_URL}/</loc></url>\n</urlset>\n`,
     )
 })
 
 /* production: serve the built client */
-if (process.env.NODE_ENV === 'production') {
+if (env.isProduction) {
   const dist = path.join(process.cwd(), 'dist')
   app.use(express.static(dist))
   app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')))

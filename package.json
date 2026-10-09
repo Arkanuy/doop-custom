@@ -46,6 +46,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
+    "envalid": "8.2.0",
     "express": "^4.19.2",
     "iconoir-react": "^7.12.1",
     "nanoid": "^5.0.7",

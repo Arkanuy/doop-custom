@@ -1,3 +1,4 @@
+import { env } from './env.ts'
 import { canvasPages, samePages } from '../shared/pages.ts'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -9,7 +10,7 @@ import * as actions from './actions.ts'
 import { canAccessCanvas } from './access.ts'
 import { isAgentKeySecret, verifyAgentKey } from './agentKeys.ts'
 import * as workspaces from './workspaces.ts'
-import { auth, getUserName, isBanned, PUBLIC_ORIGIN } from './auth.ts'
+import { auth, getUserName, isBanned } from './auth.ts'
 import { capture, captureThrottled } from './analytics.ts'
 import { renderFrame } from './screenshot.ts'
 import { DOOP_GUIDE, GUIDE_TOPICS } from './guide.ts'
@@ -141,21 +142,21 @@ function withFeedback<T extends { content: { type: 'text' | 'image'; [k: string]
    for self-hosted instances that want a looser cap (see .env.example). The
    defaults are the conservative values that suit the hosted service. */
 const uploadHits = new Map<string, number[]>()
-const UPLOADS_PER_MIN = Number(process.env.MCP_UPLOADS_PER_MIN || 15)
+const UPLOADS_PER_MIN = env.MCP_UPLOADS_PER_MIN
 
 /* photo search burns the shared Pexels quota (200 req/hour on the free tier) */
 const searchHits = new Map<string, number[]>()
-const SEARCHES_PER_MIN = Number(process.env.MCP_SEARCHES_PER_MIN || 12)
+const SEARCHES_PER_MIN = env.MCP_SEARCHES_PER_MIN
 
 /* generation spends the payer's subscription quota or money — keep a burst
    of retries from draining it */
 const generateHits = new Map<string, number[]>()
-const GENERATIONS_PER_MIN = Number(process.env.MCP_GENERATIONS_PER_MIN || 6)
+const GENERATIONS_PER_MIN = env.MCP_GENERATIONS_PER_MIN
 
 /* importing writes a potentially large HTML frame, so keep it at the same
    conservative per-user rate as the browser UI's import endpoint */
 const importHits = new Map<string, number[]>()
-const IMPORTS_PER_MIN = Number(process.env.MCP_IMPORTS_PER_MIN || 5)
+const IMPORTS_PER_MIN = env.MCP_IMPORTS_PER_MIN
 
 const agentName = z
   .string()
@@ -190,7 +191,7 @@ function frameSummary(f: {
     htmlBytes: f.html.length,
     /* public render of the CURRENT design — downloadable/hotlinkable
        (append &download, or .jpg?quality=90 for JPEG) */
-    image_url: `${PUBLIC_ORIGIN}/i/${f.id}.png?scale=2`,
+    image_url: `${env.BETTER_AUTH_URL}/i/${f.id}.png?scale=2`,
   }
 }
 
@@ -858,8 +859,8 @@ export function buildMcpServer(owner?: string, ownerId?: string): McpServer {
       const ext = format === 'jpg' ? 'jpg' : 'png'
       const q = ext === 'jpg' ? `&quality=${quality ?? 90}` : ''
       return text({
-        image_url: `${PUBLIC_ORIGIN}/i/${frame_id}.${ext}?scale=2${q}`,
-        download_url: `${PUBLIC_ORIGIN}/i/${frame_id}.${ext}?scale=2${q}&download`,
+        image_url: `${env.BETTER_AUTH_URL}/i/${frame_id}.${ext}?scale=2${q}`,
+        download_url: `${env.BETTER_AUTH_URL}/i/${frame_id}.${ext}?scale=2${q}&download`,
         width: f.width * 2,
         height: f.height * 2,
         note: 'Public URL, no auth needed. To publish: fetch the URL and upload the bytes to the target platform (e.g. WordPress POST /wp/v2/media), or hotlink it directly — it always shows the current design.',
@@ -906,7 +907,7 @@ export function buildMcpServer(owner?: string, ownerId?: string): McpServer {
           ownerId,
           uploadedBy: agent_name,
         })
-        const upload_url = `${PUBLIC_ORIGIN}/u/${token}`
+        const upload_url = `${env.BETTER_AUTH_URL}/u/${token}`
         return withFeedback(
           text({
             ok: true,
@@ -924,7 +925,7 @@ export function buildMcpServer(owner?: string, ownerId?: string): McpServer {
           ? Buffer.from(data.replace(/^data:[^,]*;base64,/, ''), 'base64')
           : await assets.fetchRemote(source_url!)
         const asset = await assets.createAsset(buf, { canvasId: canvas_id, ownerId, uploadedBy: agent_name })
-        const url = `${PUBLIC_ORIGIN}/a/${asset.id}.${asset.ext}`
+        const url = `${env.BETTER_AUTH_URL}/a/${asset.id}.${asset.ext}`
         const result = text({
           ok: true,
           url,
@@ -968,7 +969,7 @@ export function buildMcpServer(owner?: string, ownerId?: string): McpServer {
       try {
         const image = await imageGen.generateImage(ownerId, { prompt, aspect, quality })
         const asset = await assets.createAsset(image.buf, { canvasId: canvas_id, ownerId, uploadedBy: agent_name })
-        const url = `${PUBLIC_ORIGIN}/a/${asset.id}.${asset.ext}`
+        const url = `${env.BETTER_AUTH_URL}/a/${asset.id}.${asset.ext}`
         capture(ownerId ?? agent_name, 'image_generated', {
           canvas_id,
           aspect,
@@ -1099,7 +1100,7 @@ export function buildMcpServer(owner?: string, ownerId?: string): McpServer {
           'the background library is empty on this server — draw the background as CSS (layered radial-gradients with a grain overlay) instead',
         )
       try {
-        const listing = backgrounds.browseBackgrounds({ query, tone, style, slot, count }, PUBLIC_ORIGIN)
+        const listing = backgrounds.browseBackgrounds({ query, tone, style, slot, count }, env.BETTER_AUTH_URL)
         const { results } = listing
         if (results.length === 0)
           return text({
