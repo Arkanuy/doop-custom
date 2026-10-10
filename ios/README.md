@@ -16,7 +16,9 @@ HTML/CSS engine (Stylo + Taffy + Parley), compiled into the app as a static libr
   including reconnection, frame updates, agent tasks, comments and presence.
 - **Native canvas** (`Doop/Blitz/BlitzCanvasView.swift`): a UIKit view with one
   Core Animation layer per frame. Pan, pinch zoom, tap to select, double tap to zoom
-  to a frame, drag a frame by its title. Labels, selection outlines and collaborator
+  to a frame, drag a frame by its title. Dragged frames snap to other frames' edges
+  and centers within eight screen points, with alignment guides matching the web.
+  Labels, selection outlines and collaborator
   cursors are native layers, so a board with many frames costs one small bitmap per
   frame instead of one web document per frame.
 - **Blitz engine** (`Doop/Blitz/BlitzDocument.swift` over `BlitzKit/`): each frame's

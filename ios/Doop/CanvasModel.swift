@@ -5,7 +5,14 @@ import Foundation
 final class CanvasModel: ObservableObject {
     let id: String
     let client: DoopClient
-    @Published var canvas: CanvasDocument? { didSet { pruneSelection() } }
+    @Published var canvas: CanvasDocument? {
+        didSet {
+            // Full frame events and reconnect snapshots can still contain the
+            // pre-drop position. Overlay pending moves at every model entry.
+            if var document = canvas, pendingMoves.apply(to: &document.frames) { canvas = document }
+            pruneSelection()
+        }
+    }
     @Published var tasks: [CanvasTask] = []
     @Published var comments: [CanvasComment] = []
     @Published var presences: [CanvasPresence] = []
@@ -20,6 +27,7 @@ final class CanvasModel: ObservableObject {
     private var connection: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
     private let clientID = "ios-" + UUID().uuidString
+    private var pendingMoves = PendingFrameMoves()
 
     init(id: String, client: DoopClient) { self.id = id; self.client = client }
     var selected: DesignFrame? { canvas?.frames.first { $0.id == selectedID } }
@@ -155,8 +163,24 @@ final class CanvasModel: ObservableObject {
     func moveFrame(_ frameID: String, x: Double, y: Double) async {
         guard x.isFinite, y.isFinite, abs(x) < 1_000_000, abs(y) < 1_000_000,
               canvas?.frames.contains(where: { $0.id == frameID }) == true else { return }
-        do { try await patchFrame(frameID, patch: ["x": x, "y": y]) }
-        catch { self.error = error.localizedDescription; canvas = try? await client.get("/api/canvases/\(id)") }
+        let token = pendingMoves.begin(frameID: frameID, x: x, y: y)
+        // Keep the dropped preview in place while the save is in flight, even
+        // when cursor/presence events cause the canvas layers to sync.
+        if let index = canvas?.frames.firstIndex(where: { $0.id == frameID }) {
+            canvas?.frames[index].x = x
+            canvas?.frames[index].y = y
+        }
+        do {
+            let data = try await client.data("/api/frames/\(frameID)", method: "PATCH", body: ["x": x, "y": y])
+            let frame = try JSONDecoder().decode(DesignFrame.self, from: data)
+            guard pendingMoves.finish(frameID: frameID, token: token) else { return }
+            // A deletion received during the save must not resurrect the frame.
+            if canvas?.frames.contains(where: { $0.id == frameID }) == true { upsert(frame, into: &canvas!.frames) }
+        } catch {
+            guard pendingMoves.finish(frameID: frameID, token: token) else { return }
+            self.error = error.localizedDescription
+            canvas = try? await client.get("/api/canvases/\(id)")
+        }
     }
 
     /// The selection as the next prompt's scope: the picked element when it still
