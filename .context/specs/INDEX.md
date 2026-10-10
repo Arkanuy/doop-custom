@@ -6,6 +6,9 @@ lists every file in this folder.
 
 ## Active
 
+- [slack-agent.md](slack-agent.md) - Slack app: install per workspace, signed Events API / slash
+  command inbox, the durable worker that creates a canvas, runs the resident agent and posts the
+  result back in the thread, thread follow-ups, billing to the installer.
 - [outbound-webhooks.md](outbound-webhooks.md) - Per-user outbound webhooks for comment, frame and
   agent-task events: event seam, signed delivery with retries and self-pausing, SSRF screening of
   the target URL, API and settings UI.
