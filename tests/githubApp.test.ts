@@ -106,11 +106,10 @@ describe('app jwt', () => {
 
 /* ---- REST surface with the app unconfigured (the default server state) */
 
-const PORT = 4987
 let server: Server
 
 beforeAll(async () => {
-  server = await startServer(PORT)
+  server = await startServer()
 }, 70_000)
 
 afterAll(() => server?.stop())

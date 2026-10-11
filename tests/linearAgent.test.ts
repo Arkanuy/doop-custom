@@ -124,7 +124,11 @@ beforeEach(async () => {
           expires_in: 86_400,
         })
       const { query, variables } = JSON.parse(String(options?.body))
-      sent.push({ query, variables, authorization: (options?.headers as Record<string, string>).Authorization ?? '' })
+      sent.push({
+        query,
+        variables,
+        authorization: (options?.headers as Record<string, string> | undefined)?.Authorization ?? '',
+      })
       if (query.includes('DoopAgentIdentity'))
         return Response.json({
           data: {

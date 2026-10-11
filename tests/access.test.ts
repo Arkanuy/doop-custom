@@ -8,13 +8,11 @@ import { Client, startServer, type Server } from './harness.ts'
  * — this is the same surface a self-hoster exposes to the internet.
  */
 
-const PORT = 4977
-
 let server: Server
 let BASE: string
 
 beforeAll(async () => {
-  server = await startServer(PORT, { BETTER_AUTH_URL: `http://localhost:${PORT}` })
+  server = await startServer()
   BASE = server.base
 }, 70_000)
 

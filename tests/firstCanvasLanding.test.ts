@@ -2,12 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, startServer, type Server } from './harness.ts'
 import { FIRST_CANVAS_PATH } from '../shared/firstCanvas.ts'
 
-const PORT = 5019
-
 let server: Server
 
 beforeAll(async () => {
-  server = await startServer(PORT)
+  server = await startServer()
 }, 70_000)
 
 afterAll(() => server?.stop())
