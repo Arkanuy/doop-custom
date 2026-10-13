@@ -93,6 +93,10 @@ const schema = {
   MICROSOFT_CLIENT_ID: str({ default: undefined }),
   MICROSOFT_CLIENT_SECRET: str({ default: undefined }),
   MICROSOFT_TENANT_ID: str({ default: 'common' }),
+  APPLE_CLIENT_ID: str({ default: undefined }),
+  APPLE_CLIENT_SECRET: str({ default: undefined }),
+  APPLE_APP_BUNDLE_IDENTIFIER: str({ default: undefined }),
+  APPLE_JWKS_URL: str({ default: 'https://appleid.apple.com/auth/keys' }),
 
   /* --------------------------------------------------------- email */
   SMTP_HOST: str({ default: undefined }),

@@ -35,8 +35,9 @@
 
 ## 5. Security and Secrets
 
-- better-auth 1.6.26 - authentication: email/password, generic OIDC/SSO, and Google / Microsoft
-  sign-in (social providers, `GOOGLE_*` / `MICROSOFT_*` client pairs). Configuration and secrets
+- better-auth 1.6.26 - authentication: email/password, generic OIDC/SSO, and Google / Microsoft /
+  Apple sign-in (social providers, `GOOGLE_*` / `MICROSOFT_*` / `APPLE_*` client pairs; the iOS app
+  signs in with Apple natively against `APPLE_APP_BUNDLE_IDENTIFIER`). Configuration and secrets
   (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, provider client IDs/secrets) come from the
   environment (`.env`, documented in `.env.example`); never committed.
 

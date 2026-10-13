@@ -76,6 +76,18 @@ function MicrosoftMark() {
   )
 }
 
+/** Apple's mark, in the text colour as its sign-in guidelines ask (inline for the same reason). */
+function AppleMark() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" className="shrink-0">
+      <path
+        fill="currentColor"
+        d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"
+      />
+    </svg>
+  )
+}
+
 /** Google's four-colour "G", per its sign-in branding guidelines (kept inline: no icon set ships it). */
 function GoogleMark() {
   return (
@@ -159,16 +171,23 @@ interface OidcClientConfig {
   displayName?: string
   google: boolean
   microsoft: boolean
+  /** the browser "Sign in with Apple" (the iOS app's native one is appleNative, not shown here) */
+  apple: boolean
 }
 
 /* The client bundle is static and shared across self-hosted deploys — it
    can't know at build time whether the operator configured SSO, so it asks
    the server. See server/auth.ts loginProvidersConfig. */
 function useOidcConfig(): OidcClientConfig {
-  const [config, setConfig] = useState<OidcClientConfig>({ enabled: false, google: false, microsoft: false })
+  const [config, setConfig] = useState<OidcClientConfig>({
+    enabled: false,
+    google: false,
+    microsoft: false,
+    apple: false,
+  })
   useEffect(() => {
     fetch('/api/oidc-config')
-      .then((res) => (res.ok ? res.json() : { enabled: false, google: false, microsoft: false }))
+      .then((res) => (res.ok ? res.json() : { enabled: false, google: false, microsoft: false, apple: false }))
       .then(setConfig)
       .catch(() => {}) // SSO button just doesn't appear — email/password still works
   }, [])
@@ -250,7 +269,7 @@ export function AuthPage() {
     return providerSignIn('oidc', (opts) => authClient.signIn.oauth2({ providerId: 'oidc', ...opts }))
   }
 
-  function socialSignIn(provider: 'google' | 'microsoft') {
+  function socialSignIn(provider: 'google' | 'microsoft' | 'apple') {
     return providerSignIn(provider, (opts) => authClient.signIn.social({ provider, ...opts }))
   }
 
@@ -358,7 +377,7 @@ export function AuthPage() {
             </>
           )}
         </p>
-        {(oidc.enabled || oidc.google || oidc.microsoft) && (mode === 'signin' || mode === 'signup') && (
+        {(oidc.enabled || oidc.google || oidc.microsoft || oidc.apple) && (mode === 'signin' || mode === 'signup') && (
           <>
             {oidc.google && (
               <Button
@@ -386,6 +405,20 @@ export function AuthPage() {
               >
                 <MicrosoftMark />
                 {mode === 'signup' ? 'Sign up' : 'Sign in'} with Microsoft
+              </Button>
+            )}
+            {oidc.apple && (
+              <Button
+                variant="default"
+                size="lg"
+                block
+                className="border-line"
+                type="button"
+                onClick={() => socialSignIn('apple')}
+                disabled={busy}
+              >
+                <AppleMark />
+                {mode === 'signup' ? 'Sign up' : 'Sign in'} with Apple
               </Button>
             )}
             {oidc.enabled && (

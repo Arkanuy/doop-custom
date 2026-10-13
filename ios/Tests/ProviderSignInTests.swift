@@ -46,6 +46,12 @@ enum ProviderSignInChecks {
         expect(bare.available == [.oidc] && bare.label(for: .oidc) == "SSO", "SSO without a display name")
         let none = try decoder.decode(LoginProviders.self, from: Data(#"{"enabled":false,"google":false,"microsoft":false}"#.utf8))
         expect(none.available.isEmpty && none == LoginProviders.none, "no providers")
+        // An older server that predates the Apple flags still decodes; a newer one's flags are read.
+        expect(!none.appleNative, "missing Apple flags read as off")
+        let apple = try decoder.decode(LoginProviders.self, from: Data(#"{"enabled":false,"google":false,"microsoft":false,"apple":true,"appleNative":true}"#.utf8))
+        expect(apple.appleNative && apple.available.isEmpty, "native Apple is not a browser provider")
+        let empty = try decoder.decode(LoginProviders.self, from: Data("{}".utf8))
+        expect(empty == LoginProviders.none, "an empty object is no providers")
     }
 
     private static func expect(_ condition: Bool, _ message: String) { precondition(condition, message) }

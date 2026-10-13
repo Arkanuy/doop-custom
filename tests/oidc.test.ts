@@ -43,6 +43,8 @@ describe('GET /api/oidc-config', () => {
       enabled: false,
       google: false,
       microsoft: false,
+      apple: false,
+      appleNative: false,
     })
   })
 
@@ -50,7 +52,14 @@ describe('GET /api/oidc-config', () => {
     const client = new Client(configured)
     const res = await client.get('/api/oidc-config')
     const body = await res.text()
-    expect(JSON.parse(body)).toEqual({ enabled: true, displayName: 'Zitadel', google: false, microsoft: false })
+    expect(JSON.parse(body)).toEqual({
+      enabled: true,
+      displayName: 'Zitadel',
+      google: false,
+      microsoft: false,
+      apple: false,
+      appleNative: false,
+    })
     expect(body).not.toContain('test-secret')
   })
 })

@@ -215,6 +215,20 @@ final class AppModel: ObservableObject {
         workspaces = []
     }
 
+    /// Native Sign in with Apple: the sheet's identity token, the raw nonce the
+    /// request hashed, and on a first authorization the name Apple hands over.
+    /// The server verifies the token against Apple's keys for this bundle id
+    /// and answers with the session cookie.
+    func signIn(appleIdentityToken token: String, nonce: String, givenName: String?, familyName: String?) async throws {
+        let client = self.client
+        let body = AppleSignIn.body(identityToken: token, nonce: nonce, givenName: givenName, familyName: familyName)
+        _ = try await client.data("/api/auth/sign-in/social", method: "POST", body: body)
+        guard self.client === client else { return }
+        await client.persistWebSession()
+        await restore()
+        if user == nil { throw APIError(status: 0, message: "Signed in, but no session came back. Try again.") }
+    }
+
     /// Whether this account can prove itself with a password: an account that
     /// only ever signed in through Google / Microsoft / SSO has none. Throws
     /// rather than guessing: a lookup that failed must not drop the password.

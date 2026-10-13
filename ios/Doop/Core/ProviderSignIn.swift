@@ -15,17 +15,39 @@ public struct LoginProviders: Decodable, Equatable {
     public var displayName: String?
     public var google: Bool
     public var microsoft: Bool
+    /// The browser "Sign in with Apple" (a Services ID); the web page's button, not this app's.
+    public var apple: Bool
+    /// The server verifies identity tokens from this app's native Sign in with Apple sheet.
+    public var appleNative: Bool
 
-    public init(enabled: Bool = false, displayName: String? = nil, google: Bool = false, microsoft: Bool = false) {
+    public init(enabled: Bool = false, displayName: String? = nil, google: Bool = false, microsoft: Bool = false,
+                apple: Bool = false, appleNative: Bool = false) {
         self.enabled = enabled
         self.displayName = displayName
         self.google = google
         self.microsoft = microsoft
+        self.apple = apple
+        self.appleNative = appleNative
+    }
+
+    private enum CodingKeys: String, CodingKey { case enabled, displayName, google, microsoft, apple, appleNative }
+
+    /// Every flag is optional on the wire: a server older than a flag answers without it, and must read as off.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false,
+                  displayName: try container.decodeIfPresent(String.self, forKey: .displayName),
+                  google: try container.decodeIfPresent(Bool.self, forKey: .google) ?? false,
+                  microsoft: try container.decodeIfPresent(Bool.self, forKey: .microsoft) ?? false,
+                  apple: try container.decodeIfPresent(Bool.self, forKey: .apple) ?? false,
+                  appleNative: try container.decodeIfPresent(Bool.self, forKey: .appleNative) ?? false)
     }
 
     public static let none = LoginProviders()
 
-    /// Providers to offer, in the order the web sign-in page shows them.
+    /// Providers to offer through the browser handoff, in the order the web
+    /// sign-in page shows them. Apple is not among them: this app signs in
+    /// with Apple natively (`appleNative`, `AppleSignIn`).
     public var available: [SignInProvider] {
         var providers: [SignInProvider] = []
         if google { providers.append(.google) }

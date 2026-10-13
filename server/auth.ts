@@ -11,6 +11,8 @@ import * as demo from './demo.ts'
 import { mailerConfigured, sendMail } from './mailer.ts'
 import { acceptInvites } from './workspaces.ts'
 import { purgeUserData } from './accountDeletion.ts'
+import { createHash } from 'node:crypto'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 /**
  * better-auth on our own database: email/password + cookie sessions now;
@@ -145,7 +147,7 @@ interface OAuthClient {
  * the provider, neither leaves it off, and a half-set pair refuses to boot
  * rather than showing a button that can never complete.
  */
-function loadOAuthClient(prefix: 'GOOGLE' | 'MICROSOFT', label: string): OAuthClient | null {
+function loadOAuthClient(prefix: 'GOOGLE' | 'MICROSOFT' | 'APPLE', label: string): OAuthClient | null {
   const clientId = env[`${prefix}_CLIENT_ID`]
   const clientSecret = env[`${prefix}_CLIENT_SECRET`]
   const setCount = [clientId, clientSecret].filter(Boolean).length
@@ -177,14 +179,80 @@ export function loadMicrosoftConfig(): MicrosoftConfig | null {
   return client && { ...client, tenantId: env.MICROSOFT_TENANT_ID }
 }
 
+export interface AppleConfig {
+  /** Services ID + client-secret JWT: the browser "Sign in with Apple" button. Null on a native-only setup. */
+  web: OAuthClient | null
+  /** The iOS app's bundle id: identity tokens it obtains natively carry it as their audience. */
+  appBundleIdentifier: string | null
+}
+
+/**
+ * Env-gated "Sign in with Apple". Two halves, each optional on its own:
+ * APPLE_CLIENT_ID / APPLE_CLIENT_SECRET (all-or-nothing, like the other
+ * pairs) put the button on the web login page; APPLE_APP_BUNDLE_IDENTIFIER
+ * lets the iOS app sign in with the identity token it gets from the native
+ * Sign in with Apple sheet (POST /api/auth/sign-in/social with idToken),
+ * which Apple issues for the bundle id rather than the Services ID.
+ */
+export function loadAppleConfig(): AppleConfig | null {
+  const web = loadOAuthClient('APPLE', 'Apple')
+  const appBundleIdentifier = env.APPLE_APP_BUNDLE_IDENTIFIER ?? null
+  if (!web && !appBundleIdentifier) return null
+  return { web, appBundleIdentifier }
+}
+
+const APPLE_ISSUER = 'https://appleid.apple.com'
+
+/**
+ * Verifies an identity token from the iOS app's native Sign in with Apple
+ * sheet: Apple's signature (keys from APPLE_JWKS_URL, cached by jose),
+ * Apple as issuer, the app's bundle id as audience, at most an hour old,
+ * and the nonce the app says it used — Apple stores its SHA-256 in the
+ * token, so either the hash or (should Apple ever pass it through) the raw
+ * value matches. A token carrying a nonce the app did not claim is refused
+ * too: that is a token minted for some other sign-in.
+ *
+ * Owned here rather than left to better-auth's built-in check (which does
+ * the same, against a hardcoded key URL) so the suite can stand up its own
+ * keys and drive the real endpoint; see tests/appleSignIn.test.ts.
+ */
+export function appleIdentityTokenVerifier(
+  audience: string,
+  jwksUrl = env.APPLE_JWKS_URL,
+): (token: string, nonce: string | undefined) => Promise<boolean> {
+  const keys = createRemoteJWKSet(new URL(jwksUrl))
+  return async (token, nonce) => {
+    try {
+      const { payload } = await jwtVerify(token, keys, { issuer: APPLE_ISSUER, audience, maxTokenAge: '1h' })
+      const claimed = typeof payload.nonce === 'string' ? payload.nonce : undefined
+      if (claimed === undefined && nonce === undefined) return true
+      if (claimed === undefined || nonce === undefined) return false
+      return claimed === nonce || claimed === createHash('sha256').update(nonce).digest('hex')
+    } catch {
+      return false
+    }
+  }
+}
+
 /** Everything the login page needs to render its provider buttons. Never a secret. */
 export function loginProvidersConfig(): {
   enabled: boolean
   displayName?: string
   google: boolean
   microsoft: boolean
+  /** browser "Sign in with Apple" */
+  apple: boolean
+  /** the iOS app's native Sign in with Apple */
+  appleNative: boolean
 } {
-  return { ...oidcPublicConfig(), google: loadGoogleConfig() !== null, microsoft: loadMicrosoftConfig() !== null }
+  const apple = loadAppleConfig()
+  return {
+    ...oidcPublicConfig(),
+    google: loadGoogleConfig() !== null,
+    microsoft: loadMicrosoftConfig() !== null,
+    apple: apple?.web != null,
+    appleNative: apple?.appBundleIdentifier != null,
+  }
 }
 
 /**
@@ -229,8 +297,11 @@ async function linkVerifiedProviderEmail(profile: {
 }): Promise<Record<string, never>> {
   const email = typeof profile.email === 'string' ? profile.email.toLowerCase() : undefined
   const verifiedPrimary = Array.isArray(profile.verified_primary_email) ? profile.verified_primary_email : []
+  /* Apple's identity token carries email_verified as the string "true" as
+     often as the boolean (its docs allow both) */
   const verified =
     profile.email_verified === true ||
+    profile.email_verified === 'true' ||
     verifiedPrimary.some((candidate) => typeof candidate === 'string' && candidate.toLowerCase() === email)
   if (email && verified) {
     const [existing] = await db
@@ -269,6 +340,7 @@ function buildAuth() {
   const oidc = loadOidcConfig()
   const google = loadGoogleConfig()
   const microsoft = loadMicrosoftConfig()
+  const apple = loadAppleConfig()
   /* BETTER_AUTH_SECRET and BETTER_AUTH_URL are required in production; a
      missing one fails at boot in server/env.ts */
   const prod = env.isProduction
@@ -277,10 +349,13 @@ function buildAuth() {
        it, so in dev it must be the web port that proxies /api and /mcp */
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
-    /* prod: the public origin, plus any extras from env. dev: trust whichever
-       origin the request came from (localhost, 127.0.0.1, LAN IP — all fine). */
+    /* prod: the public origin, plus any extras from env, plus Apple when its
+       web flow is on: Apple returns the authorization code by POSTing a form
+       from appleid.apple.com to /api/auth/callback/apple, and better-auth's
+       CSRF check wants that origin trusted. dev: trust whichever origin the
+       request came from (localhost, 127.0.0.1, LAN IP — all fine). */
     trustedOrigins: prod
-      ? [env.BETTER_AUTH_URL, ...env.TRUSTED_ORIGINS]
+      ? [env.BETTER_AUTH_URL, ...env.TRUSTED_ORIGINS, ...(apple?.web ? ['https://appleid.apple.com'] : [])]
       : (request) => {
           const origin = request?.headers.get('origin')
           return origin ? [origin] : []
@@ -305,6 +380,28 @@ function buildAuth() {
           clientId: microsoft.clientId,
           clientSecret: microsoft.clientSecret,
           tenantId: microsoft.tenantId,
+          mapProfileToUser: linkVerifiedProviderEmail,
+        },
+      }),
+      /* Apple: the Services ID pair drives the browser flow; the bundle id is
+         the audience better-auth verifies native identity tokens against
+         (POST /api/auth/sign-in/social { provider: 'apple', idToken }). A
+         native-only setup has no Services ID, so the bundle id stands in as
+         the client id (better-auth insists on one) and the secret stays
+         empty — nothing but createAuthorizationURL reads it, and that path
+         is unreachable without the web button. */
+      ...(apple && {
+        apple: {
+          clientId: apple.web?.clientId ?? apple.appBundleIdentifier!,
+          clientSecret: apple.web?.clientSecret ?? '',
+          /* native tokens only make sense for a configured bundle id: without
+             one, the id-token sign-in is off outright rather than verified
+             against the Services ID (which Apple never puts in an app token) */
+          disableIdTokenSignIn: !apple.appBundleIdentifier,
+          ...(apple.appBundleIdentifier && {
+            appBundleIdentifier: apple.appBundleIdentifier,
+            verifyIdToken: appleIdentityTokenVerifier(apple.appBundleIdentifier),
+          }),
           mapProfileToUser: linkVerifiedProviderEmail,
         },
       }),

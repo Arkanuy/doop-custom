@@ -7,8 +7,8 @@ HTML/CSS engine (Stylo + Taffy + Parley), compiled into the app as a static libr
 
 ## Architecture
 
-- **SwiftUI**: email/password sign-in and registration, Google / Microsoft / SSO sign-in
-  (whichever the server advertises on `/api/oidc-config`), canvas library, search,
+- **SwiftUI**: email/password sign-in and registration, Google / Microsoft / SSO and native
+  Sign in with Apple (whichever the server advertises on `/api/oidc-config`), canvas library, search,
   workspace filtering, canvas creation/rename/duplicate/delete, navigation,
   account/server settings, frame list and properties, HTML editing, frame and
   element comments, agent tasks, sharing, and HTML export.
@@ -80,6 +80,11 @@ Google, Microsoft and SSO sign-in reuse the desktop app's browser handoff
 returns a one-time token over `doop://auth`, which the app redeems for its session cookie
 only when the link's challenge matches the attempt it started (`Doop/Core/ProviderSignIn.swift`).
 Accounts without a password delete themselves on a fresh session instead of a password.
+Sign in with Apple is native (`SignInWithAppleButton`, entitlement
+`com.apple.developer.applesignin`): the app hashes a fresh nonce into the request and posts the
+resulting identity token, the raw nonce and, on a first sign-in, the name Apple hands over to
+`/api/auth/sign-in/social`; the server needs `APPLE_APP_BUNDLE_IDENTIFIER` set to the app's
+bundle id to verify the token (`Doop/Core/AppleSignIn.swift`).
 
 ### BlitzKit (the Rust side)
 

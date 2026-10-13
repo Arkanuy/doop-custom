@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { stubEnv, unstubAllEnvs } from './envStub.ts'
 import {
+  loadAppleConfig,
   loadGoogleConfig,
   loadMicrosoftConfig,
   loadOidcConfig,
@@ -25,6 +26,9 @@ const OIDC_VARS = [
   'MICROSOFT_CLIENT_ID',
   'MICROSOFT_CLIENT_SECRET',
   'MICROSOFT_TENANT_ID',
+  'APPLE_CLIENT_ID',
+  'APPLE_CLIENT_SECRET',
+  'APPLE_APP_BUNDLE_IDENTIFIER',
 ] as const
 
 /* whatever this shell exports for the providers must not leak into the cases */
@@ -137,14 +141,26 @@ describe('loadGoogleConfig', () => {
 
 describe('loginProvidersConfig', () => {
   it('reports both providers off when nothing is configured', () => {
-    expect(loginProvidersConfig()).toEqual({ enabled: false, google: false, microsoft: false })
+    expect(loginProvidersConfig()).toEqual({
+      enabled: false,
+      google: false,
+      microsoft: false,
+      apple: false,
+      appleNative: false,
+    })
   })
 
   it('reports google on, independently of SSO, and never the secret', () => {
     stubEnv('GOOGLE_CLIENT_ID', 'g-client')
     stubEnv('GOOGLE_CLIENT_SECRET', 'g-secret')
 
-    expect(loginProvidersConfig()).toEqual({ enabled: false, google: true, microsoft: false })
+    expect(loginProvidersConfig()).toEqual({
+      enabled: false,
+      google: true,
+      microsoft: false,
+      apple: false,
+      appleNative: false,
+    })
     expect(JSON.stringify(loginProvidersConfig())).not.toContain('g-secret')
   })
 
@@ -153,7 +169,14 @@ describe('loginProvidersConfig', () => {
     stubEnv('GOOGLE_CLIENT_ID', 'g-client')
     stubEnv('GOOGLE_CLIENT_SECRET', 'g-secret')
 
-    expect(loginProvidersConfig()).toEqual({ enabled: true, displayName: 'SSO', google: true, microsoft: false })
+    expect(loginProvidersConfig()).toEqual({
+      enabled: true,
+      displayName: 'SSO',
+      google: true,
+      microsoft: false,
+      apple: false,
+      appleNative: false,
+    })
   })
 })
 
@@ -189,7 +212,66 @@ describe('loadMicrosoftConfig', () => {
     stubEnv('MICROSOFT_CLIENT_ID', 'm-client')
     stubEnv('MICROSOFT_CLIENT_SECRET', 'm-secret')
 
-    expect(loginProvidersConfig()).toEqual({ enabled: false, google: false, microsoft: true })
+    expect(loginProvidersConfig()).toEqual({
+      enabled: false,
+      google: false,
+      microsoft: true,
+      apple: false,
+      appleNative: false,
+    })
     expect(JSON.stringify(loginProvidersConfig())).not.toContain('m-secret')
+  })
+})
+
+describe('loadAppleConfig', () => {
+  it('returns null when nothing is set', () => {
+    expect(loadAppleConfig()).toBeNull()
+  })
+
+  it.each([{ APPLE_CLIENT_ID: 'a-client' }, { APPLE_CLIENT_SECRET: 'a-secret' }])(
+    'throws when only one of the web pair is set: %o',
+    (partial) => {
+      for (const [key, value] of Object.entries(partial)) stubEnv(key, value)
+      expect(() => loadAppleConfig()).toThrow(/APPLE_CLIENT_ID.*APPLE_CLIENT_SECRET/)
+    },
+  )
+
+  it('enables the native half on its own', () => {
+    stubEnv('APPLE_APP_BUNDLE_IDENTIFIER', 'design.doop.ios')
+
+    expect(loadAppleConfig()).toEqual({ web: null, appBundleIdentifier: 'design.doop.ios' })
+    expect(loginProvidersConfig()).toEqual({
+      enabled: false,
+      google: false,
+      microsoft: false,
+      apple: false,
+      appleNative: true,
+    })
+  })
+
+  it('enables the web half on its own, never leaking the secret', () => {
+    stubEnv('APPLE_CLIENT_ID', 'design.doop.web')
+    stubEnv('APPLE_CLIENT_SECRET', 'a-secret')
+
+    expect(loadAppleConfig()).toEqual({
+      web: { clientId: 'design.doop.web', clientSecret: 'a-secret' },
+      appBundleIdentifier: null,
+    })
+    expect(loginProvidersConfig()).toEqual({
+      enabled: false,
+      google: false,
+      microsoft: false,
+      apple: true,
+      appleNative: false,
+    })
+    expect(JSON.stringify(loginProvidersConfig())).not.toContain('a-secret')
+  })
+
+  it('combines both halves', () => {
+    stubEnv('APPLE_CLIENT_ID', 'design.doop.web')
+    stubEnv('APPLE_CLIENT_SECRET', 'a-secret')
+    stubEnv('APPLE_APP_BUNDLE_IDENTIFIER', 'design.doop.ios')
+
+    expect(loginProvidersConfig()).toMatchObject({ apple: true, appleNative: true })
   })
 })

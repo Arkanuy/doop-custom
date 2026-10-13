@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 private let doopBlue = Color(red: 39/255, green: 67/255, blue: 238/255)
@@ -41,6 +42,35 @@ private struct SignInView: View {
     @State private var registering = false
     @State private var submitting = false
     @State private var error: String?
+    /// The raw nonce behind the Apple request in flight; its hash is in the identity token.
+    @State private var appleNonce = ""
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var offersProviders: Bool { app.providers.appleNative || !app.providers.available.isEmpty }
+
+    private func finishAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .failure(let failure):
+            if (failure as? ASAuthorizationError)?.code != .canceled { error = failure.localizedDescription }
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let data = credential.identityToken, let token = String(data: data, encoding: .utf8) else {
+                error = "Apple did not return a sign-in token. Try again."
+                return
+            }
+            let nonce = appleNonce
+            let name = credential.fullName
+            submitting = true
+            error = nil
+            Task {
+                do {
+                    try await app.signIn(appleIdentityToken: token, nonce: nonce,
+                                         givenName: name?.givenName, familyName: name?.familyName)
+                } catch { self.error = error.localizedDescription }
+                submitting = false
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -53,8 +83,19 @@ private struct SignInView: View {
                         Text("A shared design space for you, your team, and your agents.")
                             .font(.title3).foregroundStyle(.secondary)
                     }
-                    if !app.providers.available.isEmpty {
+                    if offersProviders {
                         VStack(spacing: 12) {
+                            if app.providers.appleNative {
+                                SignInWithAppleButton(registering ? .signUp : .signIn) { request in
+                                    appleNonce = ProviderSignIn.newChallenge()
+                                    request.requestedScopes = [.fullName, .email]
+                                    request.nonce = AppleSignIn.hashedNonce(appleNonce)
+                                } onCompletion: { result in finishAppleSignIn(result) }
+                                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                                .frame(height: 50)
+                                .disabled(submitting)
+                                .accessibilityIdentifier("login.apple")
+                            }
                             ForEach(app.providers.available, id: \.self) { provider in
                                 Button {
                                     submitting = true
