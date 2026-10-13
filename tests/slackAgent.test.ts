@@ -135,7 +135,11 @@ beforeEach(async () => {
         })
       const body = JSON.parse(String(options?.body)) as Record<string, unknown>
       const method = target.slice(target.lastIndexOf('/') + 1)
-      sent.push({ method, body, authorization: (options?.headers as Record<string, string>).Authorization ?? '' })
+      sent.push({
+        method,
+        body,
+        authorization: (options?.headers as Record<string, string> | undefined)?.Authorization ?? '',
+      })
       if (target.startsWith('https://hooks.slack.test/')) return Response.json({ ok: true })
       if (method === 'chat.postMessage')
         return Response.json({

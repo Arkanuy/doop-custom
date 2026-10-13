@@ -1,4 +1,5 @@
 import { createServer, type Server as HttpServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, startServer, type Server } from './harness.ts'
 
@@ -32,12 +33,13 @@ beforeAll(async () => {
       )
     })
   })
-  await new Promise<void>((resolve) => slack.listen(4991, resolve))
-  server = await startServer(4990, {
+  await new Promise<void>((resolve) => slack.listen(0, resolve))
+  const slackPort = (slack.address() as AddressInfo).port
+  server = await startServer({
     SLACK_CLIENT_ID: 'slack-client',
     SLACK_CLIENT_SECRET: 'slack-secret',
     SLACK_SIGNING_SECRET: 'signing-secret',
-    SLACK_API_URL: 'http://localhost:4991',
+    SLACK_API_URL: `http://localhost:${slackPort}`,
   })
   owner = await new Client(server).signUp('slack-owner@test.dev', 'Owner')
   stranger = await new Client(server).signUp('slack-stranger@test.dev', 'Stranger')
