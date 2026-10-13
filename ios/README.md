@@ -7,7 +7,8 @@ HTML/CSS engine (Stylo + Taffy + Parley), compiled into the app as a static libr
 
 ## Architecture
 
-- **SwiftUI**: email/password sign-in and registration, canvas library, search,
+- **SwiftUI**: email/password sign-in and registration, Google / Microsoft / SSO sign-in
+  (whichever the server advertises on `/api/oidc-config`), canvas library, search,
   workspace filtering, canvas creation/rename/duplicate/delete, navigation,
   account/server settings, frame list and properties, HTML editing, frame and
   element comments, agent tasks, sharing, and HTML export.
@@ -72,6 +73,13 @@ the server additions and Apple push configuration described below. Use Doop Clou
 HTTPS self-hosted origin. Native session cookies persist; the client can also import
 an existing WKWebView login for the selected host. Passwords are never saved by the app.
 Cookies follow normal domain/path scoping, not port isolation.
+
+Google, Microsoft and SSO sign-in reuse the desktop app's browser handoff
+(`src/lib/desktopAuth.ts`): the app opens `/desktop/signin` in an
+`ASWebAuthenticationSession`, the provider round trip runs there, and the handoff page
+returns a one-time token over `doop://auth`, which the app redeems for its session cookie
+only when the link's challenge matches the attempt it started (`Doop/Core/ProviderSignIn.swift`).
+Accounts without a password delete themselves on a fresh session instead of a password.
 
 ### BlitzKit (the Rust side)
 

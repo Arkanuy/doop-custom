@@ -15,6 +15,7 @@ struct ServerAddressChecks {
         try checks.testAgentActivityStates()
         FrameSnappingChecks.run()
         try PendingFrameMoveChecks.run()
+        try ProviderSignInChecks.run()
         print("All core checks passed.")
     }
     func testNormalizesOriginAndStartsAtAuthentication() {

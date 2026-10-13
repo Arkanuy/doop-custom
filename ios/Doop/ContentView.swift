@@ -53,6 +53,38 @@ private struct SignInView: View {
                         Text("A shared design space for you, your team, and your agents.")
                             .font(.title3).foregroundStyle(.secondary)
                     }
+                    if !app.providers.available.isEmpty {
+                        VStack(spacing: 12) {
+                            ForEach(app.providers.available, id: \.self) { provider in
+                                Button {
+                                    submitting = true
+                                    error = nil
+                                    Task {
+                                        do { try await app.signIn(with: provider) }
+                                        catch is SignInCancelled {}
+                                        catch { self.error = error.localizedDescription }
+                                        submitting = false
+                                    }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        ProviderMark(provider: provider)
+                                        Text("\(registering ? "Sign up" : "Sign in") with \(app.providers.label(for: provider))").bold()
+                                    }
+                                    .frame(maxWidth: .infinity).padding(.vertical, 14)
+                                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.12)))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(submitting)
+                                .accessibilityIdentifier("login.\(provider.rawValue)")
+                            }
+                        }
+                        HStack(spacing: 12) {
+                            Rectangle().fill(.quaternary).frame(height: 1)
+                            Text("or").font(.footnote).foregroundStyle(.secondary)
+                            Rectangle().fill(.quaternary).frame(height: 1)
+                        }
+                    }
                     VStack(spacing: 16) {
                         if registering {
                             TextField("Your name", text: $name).textContentType(.name)
@@ -84,6 +116,18 @@ private struct SignInView: View {
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .toolbar { ToolbarItem(placement: .primaryAction) { Button { settings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Server settings") } }
+        }
+    }
+}
+
+/// The provider's own mark, per its sign-in branding guidelines (the same SVGs the web page inlines).
+private struct ProviderMark: View {
+    let provider: SignInProvider
+    var body: some View {
+        switch provider {
+        case .google: Image("GoogleMark").resizable().frame(width: 18, height: 18).accessibilityHidden(true)
+        case .microsoft: Image("MicrosoftMark").resizable().frame(width: 18, height: 18).accessibilityHidden(true)
+        case .oidc: Image(systemName: "person.badge.key").font(.body).accessibilityHidden(true)
         }
     }
 }
@@ -330,6 +374,7 @@ private struct NativeSettings: View {
     @State private var error: String?
     @State private var busy = false
     @State private var confirmingDeletion = false
+    @State private var hasPassword = true
     @State private var deletionPassword = ""
     var body: some View {
         NavigationStack {
@@ -346,15 +391,25 @@ private struct NativeSettings: View {
                         }.disabled(busy)
                     }
                     Section {
-                        Button("Delete account…", role: .destructive) { confirmingDeletion = true }.disabled(busy)
+                        Button("Delete account…", role: .destructive) {
+                            busy = true
+                            error = nil
+                            Task {
+                                do { hasPassword = try await app.hasPassword(); confirmingDeletion = true }
+                                catch { self.error = error.localizedDescription }
+                                busy = false
+                            }
+                        }.disabled(busy)
                     } footer: {
                         Text("Deletes your account on this server. Canvases only you own are removed; canvases shared with others stay with them.")
                     }
                     .alert("Delete your account?", isPresented: $confirmingDeletion) {
-                        SecureField("Password", text: $deletionPassword)
+                        /* an account that only ever signed in through Google /
+                           Microsoft / SSO has no password to ask for */
+                        if hasPassword { SecureField("Password", text: $deletionPassword) }
                         Button("Delete", role: .destructive) {
                             busy = true
-                            let password = deletionPassword
+                            let password = hasPassword ? deletionPassword : nil
                             deletionPassword = ""
                             Task {
                                 do { try await app.deleteAccount(password: password); dismiss() } catch { self.error = error.localizedDescription }
@@ -363,7 +418,7 @@ private struct NativeSettings: View {
                         }
                         Button("Cancel", role: .cancel) { deletionPassword = "" }
                     } message: {
-                        Text("This cannot be undone. Enter your password to confirm.")
+                        Text(hasPassword ? "This cannot be undone. Enter your password to confirm." : "This cannot be undone.")
                     }
                 }
                 Section {
