@@ -31,6 +31,8 @@ final class CanvasView: UIView, UIGestureRecognizerDelegate {
     private var fitCommand = 0
     private var drag: (id: String, origin: CGPoint, proposedOrigin: CGPoint)?
     private var pinchAnchor = CGPoint.zero
+    /// Fingers in the pinch at the last update; the centroid jumps when one lifts.
+    private var pinchTouches = 0
     private var relayout: DispatchWorkItem?
     private var pendingWakes = Set<Int>()
     private var animationLink: CADisplayLink?
@@ -543,7 +545,15 @@ final class CanvasView: UIView, UIGestureRecognizerDelegate {
             monitor.begin("pinch")
             #endif
             pinchAnchor = toWorld(center)
+            pinchTouches = gesture.numberOfTouches
         case .changed:
+            // The centroid moves to the remaining finger when one lifts (or to the
+            // midpoint when one lands): anchor the world point now under it so the
+            // view holds still instead of jumping to the new centre.
+            if gesture.numberOfTouches != pinchTouches {
+                pinchTouches = gesture.numberOfTouches
+                pinchAnchor = toWorld(center)
+            }
             zoom = max(Self.minZoom, min(Self.maxZoom, zoom * gesture.scale))
             gesture.scale = 1
             offset = CGPoint(x: center.x - pinchAnchor.x * zoom, y: center.y - pinchAnchor.y * zoom)

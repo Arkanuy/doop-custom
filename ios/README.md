@@ -44,10 +44,13 @@ HTML/CSS engine (Stylo + Taffy + Parley), compiled into the app as a static libr
   SVG images are parsed by usvg, which accepts `em`-sized roots such as iconify's.
 - **Device-pixel layout**: Taffy rounds every box to whole CSS pixels after layout,
   which at a paint scale above 1 puts a different number of device pixels on each
-  side of a box sitting on a half pixel (a 1.5px outline, a handle centred on it).
-  The bridge re-rounds the resolved layout on the device-pixel grid before each
-  paint (`round_layout_to_device`), the way browsers snap at paint time; a bridge
-  test checks the two borders of such a box differ by at most one device pixel.
+  side of a box sitting on a half pixel (a 1.5px outline, a handle centred on it),
+  and at a scale below 1 (a fitted board) made a one-device-pixel border one or two
+  CSS pixels wide depending on where its box sat. The bridge re-rounds the resolved
+  layout on the device-pixel grid before each paint (`round_layout_to_device`) at
+  every scale, the way browsers snap at paint time; bridge tests check the two
+  borders of a half-pixel box differ by at most one device pixel and that hairline
+  borders come out the same thickness wherever they sit.
 - **CSS animations**: a frame whose document reports running animations or
   transitions (`doopblitz_doc_is_animating`) is played by a `CADisplayLink` while
   it is on screen: each step paints only the on-screen part of the frame as a tile
