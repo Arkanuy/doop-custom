@@ -12,3 +12,4 @@ desktop/src-tauri/gen
 # files are ignored.
 .claude/settings.local.json
 .claude/.current-tool
+chatgpt-plugin/dist/

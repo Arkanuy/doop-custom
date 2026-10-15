@@ -1792,6 +1792,10 @@ function bridge(handler: (req: globalThis.Request) => Promise<globalThis.Respons
   }
 }
 app.get('/.well-known/oauth-authorization-server', (req, res) => bridge(oAuthDiscoveryMetadata(auth))(req, res))
+/* The same document under the OpenID Connect name: ChatGPT accepts either,
+   but its Enterprise workspace-domain restriction reads only this one (it
+   needs the userinfo_endpoint better-auth already lists there). */
+app.get('/.well-known/openid-configuration', (req, res) => bridge(oAuthDiscoveryMetadata(auth))(req, res))
 
 /* Protected-resource metadata must name the exact endpoint the CLIENT
    connected to (RFC 9728 §3.3 — strict clients such as Muse reject a `resource`
@@ -1811,6 +1815,12 @@ function protectedResourceMetadata(req: express.Request, res: express.Response) 
   })
 }
 app.get('/.well-known/oauth-protected-resource', protectedResourceMetadata)
+/* OpenAI's domain verification for the ChatGPT app directory: the bare token
+   from the Platform dashboard, no JSON. */
+app.get('/.well-known/openai-apps-challenge', (_req, res) => {
+  if (!env.OPENAI_APPS_CHALLENGE_TOKEN) return res.status(404).end()
+  res.type('text/plain').send(env.OPENAI_APPS_CHALLENGE_TOKEN)
+})
 /* path-aware variant some clients probe for a resource at /mcp */
 app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata)
 
