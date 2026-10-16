@@ -183,7 +183,6 @@ describe('MCP ChatGPT app contract', () => {
       const byName = Object.fromEntries(tools.map((t) => [t.name, t]))
       const previewTools = [
         'get_canvas',
-        'create_frame',
         'set_frame_html',
         'edit_frame_html',
         'update_frame',
@@ -200,6 +199,8 @@ describe('MCP ChatGPT app contract', () => {
       }
       /* streaming chunks must NOT each render a card — the review screenshot after the stream does */
       expect(byName.append_frame_html!._meta?.['openai/outputTemplate']).toBeUndefined()
+      /* nor the (usually still empty) frame creation — a blank artboard card that never updates */
+      expect(byName.create_frame!._meta?.['openai/outputTemplate']).toBeUndefined()
 
       const { resources } = await client.listResources()
       const preview = resources.find((r) => r.uri === FRAME_PREVIEW_URI)
@@ -214,6 +215,10 @@ describe('MCP ChatGPT app contract', () => {
       expect(html.text).toContain('if (m.error) done.reject(m.error)')
       /* images are metered renders: the grid is bounded and a failed load can be retried */
       expect(html.text).toContain('var MAX_SHOWN = 6')
+      /* an empty frame shows a placeholder, never a blank render */
+      expect(html.text).toContain('Design in progress')
+      /* the retired v1 URI stays served for chats that still hold it */
+      expect(resources.map((r) => r.uri)).toContain('ui://doop/frame-preview-1.html')
       expect(html.text).toContain('class="retry"')
       const meta = html._meta as Record<string, unknown>
       expect(meta['openai/widgetCSP']).toMatchObject({ resource_domains: [expect.stringMatching(/^http/)] })

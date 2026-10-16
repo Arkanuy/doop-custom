@@ -80,17 +80,22 @@ parts that apply to Doop are in `handleMcpRequest`:
 ## The preview card (`server/chatgptApp.ts`)
 
 ChatGPT renders an HTML component next to a tool result when the tool's `_meta` names a
-resource. Doop registers one component, `ui://doop/frame-preview-1.html` (the URI doubles as
+resource. Doop registers one component, `ui://doop/frame-preview-2.html` (the URI doubles as
 the version: bump `PREVIEW_VERSION` and append the old URI to `RETIRED_PREVIEW_URIS` whenever
-the markup changes, because hosts cache the template per URI), served as
+the markup changes, because hosts cache the template per URI; version 1 is retired but still
+served for chats that hold it), served as
 `text/html;profile=mcp-app` (the MCP Apps standard, which ChatGPT now speaks) with ChatGPT's
 original `openai/*` aliases set as well:
 
-- Tools that carry it: `get_canvas`, `create_frame`, `set_frame_html`, `edit_frame_html`,
-  `update_frame`, `get_frame_screenshot`, `import_webpage`, `import_psd`. Each adds
-  `structuredContent: CanvasPreview` (`{ canvas: {id,name,url}, frames: [{id,name,width,height,
-image_url,url}] }`) via `withPreview()`. `append_frame_html` deliberately has no card: one card
-  per streamed chunk would flood the chat; the review screenshot after the stream shows the result.
+- Tools that carry it: `get_canvas`, `set_frame_html`, `edit_frame_html`, `update_frame`,
+  `get_frame_screenshot`, `import_webpage`, `import_psd`. Each adds `structuredContent:
+CanvasPreview` (`{ canvas: {id,name,url}, frames: [{id,name,width,height,image_url,url,empty}]
+}`) via `withPreview()`. `append_frame_html` deliberately has no card: one card per streamed
+  chunk would flood the chat; the review screenshot after the stream shows the result. Neither
+  does `create_frame`: in the streaming flow the frame is empty at that point, and a card showing
+  a blank artboard never updates (seen in the first real ChatGPT test, 2026-10-16). A frame whose
+  HTML is still empty (`empty: true`, e.g. listed by `get_canvas` mid-stream) shows a "Design in
+  progress" placeholder instead of a render.
 - The component is dependency-free HTML: a grid of `/i/<frame>.png?scale=1&v=<updatedAt>` renders
   (public route, cache-busted per edit) and an "Open in Doop" button. It speaks both host
   dialects: the MCP Apps handshake (`ui/initialize` with `protocolVersion: "2026-01-26"`, then

@@ -19,9 +19,9 @@ import type { Frame } from '../shared/types.ts'
    below must bump the version or linked users keep the old card. A chat
    that holds a retired URI fails with "Failed to fetch template", so a
    bumped version is ADDED to RETIRED_PREVIEW_URIS, never replaced. */
-const PREVIEW_VERSION = 1
+const PREVIEW_VERSION = 2
 export const FRAME_PREVIEW_URI = `ui://doop/frame-preview-${PREVIEW_VERSION}.html`
-export const RETIRED_PREVIEW_URIS: readonly string[] = []
+export const RETIRED_PREVIEW_URIS: readonly string[] = ['ui://doop/frame-preview-1.html']
 const PREVIEW_MIME = 'text/html;profile=mcp-app'
 
 export type FramePreview = {
@@ -36,6 +36,9 @@ export type FramePreview = {
   image_url: string
   /** the canvas, scrolled to this frame */
   url: string
+  /** no HTML yet (created, not streamed into): the card shows a placeholder
+   *  instead of rendering a blank artboard */
+  empty: boolean
 }
 
 export type CanvasPreview = {
@@ -57,6 +60,7 @@ export function previewOf(canvas: { id: string; name: string }, frames: Frame[])
       height: f.height,
       image_url: `${origin()}/i/${f.id}.png?scale=1&v=${f.updatedAt}`,
       url: `${canvasUrl}?frame=${f.id}`,
+      empty: f.html.trim().length === 0,
     })),
   }
 }
@@ -232,8 +236,10 @@ export function framePreviewHtml(): string {
       for (var i = 0; i < shown.length; i++) {
         var f = shown[i];
         var ratio = f.width && f.height ? f.width + ' / ' + f.height : '4 / 3';
-        html += '<div class="card"><a href="' + esc(f.url) + '" data-href="' + esc(f.url) + '">' +
-          '<img class="shot" src="' + esc(f.image_url) + '" alt="' + esc(f.name) + '" loading="lazy" style="aspect-ratio:' + esc(ratio) + '; max-height: 480px;" /></a>' +
+        var shot = f.empty
+          ? '<div class="shot missing" style="aspect-ratio:' + esc(ratio) + '; max-height: 240px;"><span>Design in progress</span></div>'
+          : '<img class="shot" src="' + esc(f.image_url) + '" alt="' + esc(f.name) + '" loading="lazy" style="aspect-ratio:' + esc(ratio) + '; max-height: 480px;" />';
+        html += '<div class="card"><a href="' + esc(f.url) + '" data-href="' + esc(f.url) + '">' + shot + '</a>' +
           '<div class="meta"><b>' + esc(f.name) + '</b><span>' + esc(f.width) + '×' + esc(f.height) + '</span></div></div>';
       }
       if (frames.length > shown.length) {

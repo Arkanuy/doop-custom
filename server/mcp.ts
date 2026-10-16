@@ -831,7 +831,10 @@ export function buildMcpServer(owner?: string, ownerId?: string): McpServer {
     'create_frame',
     {
       title: 'Create a frame',
-      _meta: previewToolMeta('Designing on your canvas…', 'Frame created'),
+      /* no preview card: in the streaming flow the frame is empty here, and
+         a card that shows a blank artboard never updates (append_frame_html
+         has no card either). The review screenshot after the stream is the
+         first card the person sees. */
       description:
         'Create a new frame on a canvas with an HTML design. A frame is a rectangular artboard that renders a full HTML document (inline <style> and <script> allowed, no external network access needed). If x/y are omitted the frame is auto-placed to the right of existing frames. Everyone viewing the canvas sees it appear live.',
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -861,14 +864,10 @@ export function buildMcpServer(owner?: string, ownerId?: string): McpServer {
           : text({ ok: true, frame: frameSummary(frame) }),
         html,
       )
-      return withPreview(
-        withGuidelinesNudge(
-          withStatusNudge(withFeedback(result, canvas_id, actorFrom(agent_name)), canvas_id, actorFrom(agent_name)),
-          canvas_id,
-          actorFrom(agent_name),
-        ),
+      return withGuidelinesNudge(
+        withStatusNudge(withFeedback(result, canvas_id, actorFrom(agent_name)), canvas_id, actorFrom(agent_name)),
         canvas_id,
-        [frame],
+        actorFrom(agent_name),
       )
     },
   )
