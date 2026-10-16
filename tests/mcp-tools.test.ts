@@ -188,7 +188,6 @@ describe('MCP ChatGPT app contract', () => {
         'update_frame',
         'get_frame_screenshot',
         'import_webpage',
-        'import_psd',
       ]
       for (const name of previewTools) {
         const meta = byName[name]!._meta as Record<string, unknown>

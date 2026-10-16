@@ -78,10 +78,8 @@ describe('server/env.ts', () => {
     expect(() => (env as unknown as Record<string, unknown>).MCP_UPLOAD_PER_MIN).toThrow(/MCP_UPLOAD_PER_MIN/)
   })
 
-  it('documents every declared variable in .env.example or .env.private.example', () => {
-    const example = ['../.env.example', '../.env.private.example']
-      .map((file) => readFileSync(new URL(file, import.meta.url), 'utf8'))
-      .join('\n')
+  it('documents every declared variable in .env.example', () => {
+    const example = ['../.env.example'].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n')
     const documented = new Set([...example.matchAll(/^#?([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]))
     expect(ENV_KEYS.filter((key) => !documented.has(key))).toEqual([])
   })

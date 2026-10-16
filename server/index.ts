@@ -1815,12 +1815,6 @@ function protectedResourceMetadata(req: express.Request, res: express.Response) 
   })
 }
 app.get('/.well-known/oauth-protected-resource', protectedResourceMetadata)
-/* OpenAI's domain verification for the ChatGPT app directory: the bare token
-   from the Platform dashboard, no JSON. */
-app.get('/.well-known/openai-apps-challenge', (_req, res) => {
-  if (!env.OPENAI_APPS_CHALLENGE_TOKEN) return res.status(404).end()
-  res.type('text/plain').send(env.OPENAI_APPS_CHALLENGE_TOKEN)
-})
 /* path-aware variant some clients probe for a resource at /mcp */
 app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata)
 

@@ -14,9 +14,8 @@ import { DEFAULT_GEMINI_MODEL, DEFAULT_OPENROUTER_MODEL } from '../shared/modelM
  * inside the function — the second kind is what lets unit tests flip a
  * variable at runtime (see tests/envStub.ts).
  *
- * `.env.example` (and `.env.private.example` for the hosted deployment's
- * extras) is the human-facing documentation; tests/env.test.ts checks that
- * every key declared here is listed in one of them.
+ * `.env.example` is the human-facing documentation; tests/env.test.ts checks
+ * that every key declared here is listed there.
  *
  * The Gemini cloud worker (server/geminiCloudWorkerMain.ts) is a separate
  * process with its own three variables and does not load this schema.

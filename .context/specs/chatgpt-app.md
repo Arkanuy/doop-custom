@@ -52,8 +52,9 @@ parts that apply to Doop are in `handleMcpRequest`:
 - **The component URI is a cache key.** `ui://doop/frame-preview-<n>.html`: any change to the
   markup bumps `PREVIEW_VERSION` and appends the old URI to `RETIRED_PREVIEW_URIS`, which stay
   served forever, because a chat holding a retired URI cannot render its card.
-- **Domain verification.** `/.well-known/openai-apps-challenge` returns the bare token from
-  `OPENAI_APPS_CHALLENGE_TOKEN` (hosted-only, `.env.private.example`); 404 when unset.
+- **Domain verification.** The hosted doop.design deployment serves
+  `/.well-known/openai-apps-challenge` with OpenAI's bare challenge token; this repo answers 404
+  there, since only the directory listing's owner needs it.
 - **Stateless on purpose.** ChatGPT relays component-initiated calls as independent requests, so
   a session-keyed server would answer "Server not initialized". `/mcp` was already stateless.
 - Not copied: per-tool `securitySchemes` (SlideSpeak grafts them onto the `tools/list` response
