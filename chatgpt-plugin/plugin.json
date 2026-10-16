@@ -36,7 +36,7 @@
         "composerIcon": "./assets/logo.png"
       },
       "review": {
-        "demo_recording_url": "REPLACE_WITH_REVIEWER_ACCESSIBLE_VIDEO_URL",
+        "demo_recording_url": "https://www.loom.com/share/e4269d063a96443bbdee452fb58c73c3",
         "test_cases": {
           "positive": [
             {
@@ -47,7 +47,7 @@
             },
             {
               "description": "Edit an existing frame from feedback.",
-              "prompt": "On my Doop canvas, make the call-to-action button on the hero frame bigger and orange.",
+              "prompt": "On my Doop canvas, make the call-to-action button on the hero frame bigger and red.",
               "tools_triggered": "list_canvases, get_canvas, get_frame, edit_frame_html, get_frame_screenshot",
               "expected_behavior": "ChatGPT finds the frame, applies a targeted find-and-replace edit, reviews it with a screenshot, and the updated frame preview appears in the chat."
             },

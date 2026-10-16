@@ -164,4 +164,4 @@ Example prompts for the listing:
 - "Design a landing page hero for a coffee subscription. Dark, editorial, one bold display face."
 - "Redesign the pricing section of acme.com on my Doop canvas."
 - "Turn these three bullet points into a pitch slide."
-- "Make the call-to-action on my hero frame bigger and orange."
+- "Make the call-to-action on my hero frame bigger and red."
