@@ -15,6 +15,10 @@ HTML/CSS engine (Stylo + Taffy + Parley), compiled into the app as a static libr
 - **Swift networking**: `DoopClient` talks to the existing REST API using session
   cookies. `CanvasModel` owns the canvas state and its authenticated WebSocket room,
   including reconnection, frame updates, agent tasks, comments and presence.
+  The initial WebSocket message supplies the canvas without a second REST download.
+  Messages may be up to 64 MiB; larger messages and invalid payloads report a specific
+  error instead of retrying forever. Backgrounding cancels the current connection,
+  and callbacks from that connection cannot change a later foreground session.
 - **Native canvas** (`Doop/Blitz/BlitzCanvasView.swift`): a UIKit view with one
   Core Animation layer per frame. Pan, pinch zoom, tap to select, double tap to zoom
   to a frame, drag a frame by its title. Dragged frames snap to other frames' edges
@@ -168,6 +172,7 @@ xcrun simctl launch booted design.doop.ios -serverOrigin https://localhost:18443
 
 ```sh
 swift run --package-path ios DoopCoreChecks
+bash ios/ConnectionTests/run.sh # local TLS WebSocket fixture; requires Bun and OpenSSL
 (cd ios/BlitzKit/rust && cargo test --release)
 xcodebuild -project ios/Doop.xcodeproj -scheme Doop \
   -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \

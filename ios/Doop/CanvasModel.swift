@@ -1,5 +1,7 @@
 import CoreGraphics
+import Combine
 import Foundation
+import os
 
 @MainActor
 final class CanvasModel: ObservableObject {
@@ -18,6 +20,8 @@ final class CanvasModel: ObservableObject {
     @Published var presences: [CanvasPresence] = []
     @Published var selectedID: String?
     @Published var connected = false
+    @Published var connecting = false
+    @Published var connectionError: String?
     @Published var error: String?
     @Published var deleted = false
     /// When on, taps inside the selected frame pick elements instead of frames.
@@ -25,22 +29,38 @@ final class CanvasModel: ObservableObject {
     @Published var selectedElement: SelectedElement?
     @Published var viewportCommand = 0
     private var connection: Task<Void, Never>?
+    private var connectionID: UUID?
     private var socket: URLSessionWebSocketTask?
     private let clientID = "ios-" + UUID().uuidString
     private var pendingMoves = PendingFrameMoves()
+    private let connectionLog = Logger(subsystem: "design.doop.ios", category: "canvas.connection")
 
     init(id: String, client: DoopClient) { self.id = id; self.client = client }
     var selected: DesignFrame? { canvas?.frames.first { $0.id == selectedID } }
 
     func start() {
         guard connection == nil else { return }
+        let generation = UUID()
+        connectionID = generation
+        connecting = true
+        connectionError = nil
         #if DEBUG
         startFakeCollaborators()
         #endif
         connection = Task {
-            do { canvas = try await client.get("/api/canvases/\(id)") }
-            catch { self.error = error.localizedDescription }
-            while !Task.isCancelled {
+            defer {
+                if connectionID == generation {
+                    socket?.cancel(with: .goingAway, reason: nil)
+                    socket = nil
+                    connection = nil
+                    connectionID = nil
+                    connecting = false
+                }
+            }
+            // `init` already contains the full canvas. Open the socket directly
+            // instead of downloading every frame twice on each foreground visit.
+            while connectionID == generation && !Task.isCancelled {
+                var attempt: URLSessionWebSocketTask?
                 do {
                     var request = try client.request("/ws")
                     var url = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
@@ -49,13 +69,18 @@ final class CanvasModel: ObservableObject {
                     let cookies = HTTPCookieStorage.shared.cookies(for: client.server.home) ?? []
                     request.setValue(HTTPCookie.requestHeaderFields(with: cookies)["Cookie"], forHTTPHeaderField: "Cookie")
                     request.url = url.url
-                    let ws = client.session.webSocketTask(with: request)
+                    let ws = CanvasSocket.task(session: client.session, request: request)
+                    attempt = ws
                     socket = ws
                     ws.resume()
                     let join: [String: Any] = ["type": "join", "canvasId": id, "clientId": clientID, "name": "iOS", "kind": "user"]
-                    try await send(join)
-                    while !Task.isCancelled {
+                    let joinData = try JSONSerialization.data(withJSONObject: join)
+                    try await ws.send(.string(String(decoding: joinData, as: UTF8.self)))
+                    while connectionID == generation && !Task.isCancelled {
                         let message = try await ws.receive()
+                        // A suspended receive may finish after stop/start has
+                        // installed a new socket. It no longer owns this model.
+                        guard connectionID == generation, !Task.isCancelled else { return }
                         let data: Data
                         switch message {
                         case .data(let value): data = value
@@ -65,15 +90,23 @@ final class CanvasModel: ObservableObject {
                         apply(try JSONDecoder().decode(CanvasEvent.self, from: data))
                     }
                 } catch {
+                    let code = attempt?.closeCode.rawValue ?? 0
+                    attempt?.cancel(with: .goingAway, reason: nil)
+                    guard connectionID == generation, !Task.isCancelled else { return }
+                    socket = nil
                     connected = false
-                    if Task.isCancelled { break }
-                    let code = socket?.closeCode.rawValue
-                    if code == 4401 || code == 4403 {
+                    let failure = CanvasSocket.failure(for: error, closeCode: code)
+                    connecting = failure.shouldRetry
+                    let nsError = error as NSError
+                    // Keep payloads, URLs and cookies out of diagnostics.
+                    connectionLog.error("Canvas socket failed: \(nsError.domain, privacy: .public) code \(nsError.code) close \(code)")
+                    connectionError = failure.message
+                    if failure == .sessionExpired || failure == .accessDenied {
                         await AgentLiveActivities.shared.endCanvas(id: id, client: client)
-                        self.error = code == 4401 ? "Your session expired. Return to the library and sign in again." : "You no longer have access to this canvas."
-                        break
+                        return
                     }
-                    self.error = "Connection interrupted. Reconnecting…"
+                    if failure == .notFound { deleted = true }
+                    guard failure.shouldRetry else { return }
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
                 }
             }
@@ -81,11 +114,15 @@ final class CanvasModel: ObservableObject {
     }
 
     func stop() {
+        // Revoke ownership before cancellation wakes the old task's catch.
+        connectionID = nil
         connection?.cancel()
         connection = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         connected = false
+        connecting = false
+        connectionError = nil
     }
 
     private func send(_ payload: [String: Any]) async throws {
@@ -108,7 +145,8 @@ final class CanvasModel: ObservableObject {
             comments = event.comments ?? []
             presences = event.presences ?? []
             connected = true
-            error = nil
+            connecting = false
+            connectionError = nil
         case "frame:created", "frame:updated":
             if let frame = event.frame, canvas != nil { upsert(frame, into: &canvas!.frames) }
         case "frame:deleted":

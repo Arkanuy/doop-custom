@@ -24,16 +24,16 @@ struct NativeCanvasView: View {
         VStack(spacing: 0) {
             HStack(spacing: 7) {
                 Circle().fill(model.connected ? .green : .orange).frame(width: 6, height: 6)
-                Text(model.connected ? "Live" : "Connecting…")
+                Text(model.connected ? "Live" : model.connecting ? "Connecting…" : "Disconnected")
                 Spacer()
                 if !model.presences.isEmpty { Label("\(model.presences.count) here", systemImage: "person.2") }
                 Text("\(model.canvas?.frames.count ?? 0) \(model.canvas?.frames.count == 1 ? "frame" : "frames")")
             }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 18).padding(.vertical, 10)
-            if let error = model.error {
+            if let error = model.error ?? model.connectionError {
                 HStack {
                     Text(error).font(.caption)
                     Spacer()
-                    Button { model.error = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("Dismiss message")
+                    Button { if model.error != nil { model.error = nil } else { model.connectionError = nil } } label: { Image(systemName: "xmark") }.accessibilityLabel("Dismiss message")
                 }.padding(12).background(Color.orange.opacity(0.12))
             }
             ZStack(alignment: .bottom) {
@@ -111,7 +111,7 @@ struct NativeCanvasView: View {
                 }
             }
         }
-        .onAppear { model.start() }
+        .onAppear { if scenePhase == .active { model.start() } }
         .onDisappear { model.stop() }
         .onChange(of: scenePhase) { phase in if phase == .active { model.start() } else if phase == .background { model.stop() } }
         .onChange(of: model.deleted) { deleted in if deleted { dismiss() } }
