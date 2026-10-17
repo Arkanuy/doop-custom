@@ -109,7 +109,7 @@ const schema = {
   WEBHOOK_ALLOW_PRIVATE_URLS: bool({ default: false }),
 
   /* ------------------------------------------------ resident agents */
-  DOOP_AGENT_PROVIDER: str({ choices: ['anthropic', 'azure'], default: 'anthropic' }),
+  DOOP_AGENT_PROVIDER: str({ choices: ['anthropic', 'azure', 'custom'], default: 'anthropic' }),
   ANTHROPIC_API_KEY: str({ default: undefined }),
   AZURE_OPENAI_ENDPOINT: str({ default: undefined }),
   AZURE_OPENAI_API_KEY: str({ default: undefined }),
@@ -137,6 +137,17 @@ const schema = {
   CHATGPT_ORIGINATOR: str({ default: 'codex_cli_rs' }),
   OPENAI_RESPONSES_URL: str({ default: 'https://api.openai.com/v1/responses' }),
   OPENROUTER_CHAT_URL: str({ default: 'https://openrouter.ai/api/v1/chat/completions' }),
+  /* Operator-set OpenAI-compatible endpoint. Deliberately an env var, never a
+     browser field: a user-supplied base URL would be a server-side fetch
+     target (SSRF). The Settings panel writes to this file, not to a request
+     body, so the trust boundary stays where it is. */
+  DOOP_CUSTOM_CHAT_URL: str({ default: undefined }),
+  DOOP_CUSTOM_CHAT_KEY: str({ default: undefined }),
+  DOOP_CUSTOM_CHAT_MODEL: str({ default: undefined }),
+  DOOP_CUSTOM_CHAT_LABEL: str({ default: 'Custom endpoint' }),
+  /* false = the endpoint's model cannot see images, so runs skip the visual
+     review step instead of sending a screenshot it would reject. */
+  DOOP_CUSTOM_CHAT_VISION: bool({ default: true }),
   GEMINI_OPENAI_CHAT_URL: str({
     default: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
   }),

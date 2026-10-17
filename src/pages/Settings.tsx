@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { posthog } from '../lib/posthog'
 import { openCanvasTab } from '../lib/desktop'
 import { ModelAccountPanel } from '../components/ModelAccount'
+import { CustomEndpointCard } from '../components/CustomEndpoint'
 import { ImageModelCard } from '../components/ImageModelCard'
 import { useAllowance } from '../components/TeamAllowance'
 import { ACCOUNT_KIND_LABELS } from '../../shared/modelMenu'
@@ -217,6 +218,7 @@ export function Settings() {
                 </CardHeader>
                 <ModelAccountPanel onChange={refresh} />
               </Card>
+              <CustomEndpointCard />
               <ImageModelCard />
             </>
           ) : pane === 'keys' ? (

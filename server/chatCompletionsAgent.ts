@@ -37,6 +37,32 @@ import type { StopReason, TurnBlock, TurnRequest, TurnResult } from './openaiAge
 export const OPENROUTER_URL = env.OPENROUTER_CHAT_URL
 export const GEMINI_OPENAI_URL = env.GEMINI_OPENAI_CHAT_URL
 
+/**
+ * An operator-configured OpenAI-compatible endpoint (self-hosted gateway,
+ * LiteLLM, vLLM, a proxy in front of several vendors, ...).
+ *
+ * This is the one non-constant URL the module will talk to, and it is read
+ * from the environment at call time rather than from a request body. The
+ * distinction is the whole safety argument for it existing: the operator of
+ * this Doop instance chooses the target, so the server is not turned into a
+ * fetch primitive for whoever can open the Settings page. Value changes are
+ * picked up by reloadEnv, so the Settings panel can switch endpoints without
+ * a restart.
+ */
+export function customChatConfig(): ChatCompletionsConfig | null {
+  const url = env.DOOP_CUSTOM_CHAT_URL
+  const model = env.DOOP_CUSTOM_CHAT_MODEL
+  if (!url || !model) return null
+  const key = env.DOOP_CUSTOM_CHAT_KEY
+  return {
+    url,
+    headers: { ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+    model,
+    label: env.DOOP_CUSTOM_CHAT_LABEL || 'Custom endpoint',
+    vision: env.DOOP_CUSTOM_CHAT_VISION,
+  }
+}
+
 export const IMAGE_OMITTED_NOTE = '[image omitted — the selected model cannot view images]'
 
 const APP_ORIGIN = env.BETTER_AUTH_URL

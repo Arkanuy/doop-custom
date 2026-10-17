@@ -1,4 +1,6 @@
-import { env } from './env.ts'
+import { env, reloadEnv } from './env.ts'
+import { clearEnvKeys, writeEnvKeys } from './envFile.ts'
+import { customChatConfig } from './chatCompletionsAgent.ts'
 import { canvasPages, samePages } from '../shared/pages.ts'
 import { FIRST_CANVAS_PATH } from '../shared/firstCanvas.ts'
 import { localAgentRouter, handleLocalAgentMcp } from './localAgent.ts'
@@ -707,6 +709,109 @@ app.patch('/api/model-account', async (req, res) => {
     res.json(accountView(await modelAccounts.setAccountModel(req.user!.id, String(req.body?.model ?? ''))))
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'could not change the model' })
+  }
+})
+
+/* ---- the operator's custom OpenAI-compatible endpoint --------------- */
+
+/**
+ * Settings → Doop Agent → Custom endpoint.
+ *
+ * The endpoint is a server-side fetch target, so this surface is
+ * operator-only and write-controlled:
+ *
+ *  - reads expose whether a key is set (`hasKey`), never the key;
+ *  - writes go to the instance `.env` via `envFile.ts` and then `reloadEnv()`,
+ *    so nothing about the target comes from a request body at call time;
+ *  - only absolute http(s) URLs are accepted — a relative or `file:` target
+ *    would make the server read something it never agreed to.
+ *
+ * `isAdmin` is the same gate every other instance-wide setting uses; on a
+ * single-operator install (`ADMIN_EMAILS`) that is just the owner.
+ */
+const CUSTOM_ENDPOINT_KEYS = [
+  'DOOP_CUSTOM_CHAT_URL',
+  'DOOP_CUSTOM_CHAT_KEY',
+  'DOOP_CUSTOM_CHAT_MODEL',
+  'DOOP_CUSTOM_CHAT_LABEL',
+  'DOOP_CUSTOM_CHAT_VISION',
+] as const
+
+function customEndpointView() {
+  const config = customChatConfig()
+  return {
+    enabled: config !== null,
+    provider: env.DOOP_AGENT_PROVIDER,
+    url: env.DOOP_CUSTOM_CHAT_URL ?? '',
+    model: env.DOOP_CUSTOM_CHAT_MODEL ?? '',
+    label: env.DOOP_CUSTOM_CHAT_LABEL || 'Custom endpoint',
+    vision: env.DOOP_CUSTOM_CHAT_VISION,
+    hasKey: Boolean(env.DOOP_CUSTOM_CHAT_KEY),
+    /* the model actually serving turns, when this endpoint is the one in use */
+    active: config ? `${config.label} (${config.model})` : null,
+  }
+}
+
+function requireOperator(req: express.Request, res: express.Response): boolean {
+  if (isAdmin(req.user)) return true
+  res.status(403).json({ error: 'only an instance admin can change the custom endpoint' })
+  return false
+}
+
+/** Accept only an absolute http(s) URL, normalized without a trailing slash. */
+function normalizeEndpointUrl(raw: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+  return raw.replace(/\/+$/, '')
+}
+
+app.get('/api/custom-endpoint', (req, res) => {
+  if (!requireOperator(req, res)) return
+  res.json(customEndpointView())
+})
+
+app.put('/api/custom-endpoint', async (req, res) => {
+  if (!requireOperator(req, res)) return
+  const url = normalizeEndpointUrl(String(req.body?.url ?? '').trim())
+  if (!url) return res.status(400).json({ error: 'Enter an absolute http:// or https:// URL' })
+  const model = String(req.body?.model ?? '').trim()
+  if (!model) return res.status(400).json({ error: 'Enter the model id the endpoint expects' })
+  const label = String(req.body?.label ?? '').trim() || 'Custom endpoint'
+  const vision = req.body?.vision === undefined ? true : Boolean(req.body.vision)
+  /* an empty apiKey means "leave the stored one alone" — the UI never reads it
+     back, so sending blank must not wipe a working credential */
+  const apiKey = req.body?.apiKey === undefined ? null : String(req.body.apiKey).trim()
+
+  const updates: Record<string, string> = {
+    DOOP_CUSTOM_CHAT_URL: url,
+    DOOP_CUSTOM_CHAT_MODEL: model,
+    DOOP_CUSTOM_CHAT_LABEL: label,
+    DOOP_CUSTOM_CHAT_VISION: vision ? 'true' : 'false',
+  }
+  if (apiKey !== null) updates.DOOP_CUSTOM_CHAT_KEY = apiKey
+
+  try {
+    writeEnvKeys(updates)
+    reloadEnv()
+    res.json(customEndpointView())
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'could not write .env' })
+  }
+})
+
+app.delete('/api/custom-endpoint', (req, res) => {
+  if (!requireOperator(req, res)) return
+  try {
+    clearEnvKeys([...CUSTOM_ENDPOINT_KEYS])
+    reloadEnv()
+    res.json(customEndpointView())
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'could not write .env' })
   }
 })
 
@@ -1975,10 +2080,23 @@ server.listen(PORT, () => {
      a self-hoster cannot debug from the UI — board cards and @mentions just
      sit there. Say so at boot, not only when the first card is queued. */
   const tier = serverTierInfo()
+  /* name the provider actually selected, not just the two upstream ones */
+  const tierName =
+    tier.provider === 'azure'
+      ? 'Azure OpenAI deployment'
+      : tier.provider === 'custom'
+        ? `${env.DOOP_CUSTOM_CHAT_LABEL || 'custom endpoint'} (${env.DOOP_CUSTOM_CHAT_URL || 'unset'})`
+        : 'Anthropic key'
+  const tierHint =
+    tier.provider === 'azure'
+      ? 'set the AZURE_OPENAI_* vars'
+      : tier.provider === 'custom'
+        ? 'set DOOP_CUSTOM_CHAT_URL and DOOP_CUSTOM_CHAT_MODEL'
+        : 'set ANTHROPIC_API_KEY'
   console.log(
     tier.ready
-      ? `⟡ doop agent        on — free tier on this server’s ${tier.provider === 'azure' ? 'Azure OpenAI deployment' : 'Anthropic key'}, then each user’s own model account`
-      : `⟡ doop agent        no server ${tier.provider === 'azure' ? 'Azure config' : 'key'} — runs only for users who connect their own ChatGPT subscription or OpenAI key (${tier.provider === 'azure' ? 'set the AZURE_OPENAI_* vars' : 'set ANTHROPIC_API_KEY'} for a free tier; agents connected over MCP work regardless)`,
+      ? `⟡ doop agent        on — free tier on this server’s ${tierName}, then each user’s own model account`
+      : `⟡ doop agent        no server ${tierName} — runs only for users who connect their own ChatGPT subscription or OpenAI key (${tierHint} for a free tier; agents connected over MCP work regardless)`,
   )
   console.log(
     serverImageGenEnabled()

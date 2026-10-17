@@ -8,7 +8,7 @@ import { getAccount, withFreshToken, accountModelFor, accountVisionFor } from '.
 import type { AccountKind, ModelAccount } from './modelAccounts.ts'
 import { ModelAuthError, ModelUnavailableError, runAzureTurn, runOpenAiTurn } from './openaiAgent.ts'
 import type { StopReason, TurnBlock } from './openaiAgent.ts'
-import { geminiConfig, openrouterConfig, runChatCompletionsTurn } from './chatCompletionsAgent.ts'
+import { customChatConfig, geminiConfig, openrouterConfig, runChatCompletionsTurn } from './chatCompletionsAgent.ts'
 
 /**
  * Which model runs a Doop Agent turn, and on whose bill.
@@ -28,7 +28,7 @@ import { geminiConfig, openrouterConfig, runChatCompletionsTurn } from './chatCo
  * else's request.
  */
 
-export type ServerProvider = 'anthropic' | 'azure'
+export type ServerProvider = 'anthropic' | 'azure' | 'custom'
 export type Provider = ServerProvider | AccountKind | 'claude-local' | 'gemini-cloud'
 
 export interface AgentTurnRequest {
@@ -162,9 +162,44 @@ function azureTier(): AgentModel | null {
   }
 }
 
+/* ---------------------------------------------------------------- */
+/* the custom OpenAI-compatible endpoint tier                       */
+/* ---------------------------------------------------------------- */
+
+/**
+ * An operator-configured Chat Completions endpoint as the free/server tier.
+ *
+ * `customChatConfig()` returns null until an operator has set both the URL
+ * and the model, so enabling this provider in DOOP_AGENT_PROVIDER without
+ * configuring the endpoint degrades to "no free tier" rather than booting a
+ * broken one.
+ */
+function customTier(): AgentModel | null {
+  const config = customChatConfig()
+  if (!config) {
+    warnOnce(
+      '[doop-agent] DOOP_AGENT_PROVIDER=custom but DOOP_CUSTOM_CHAT_URL / DOOP_CUSTOM_CHAT_MODEL are not both set — the free tier is off. Configure them in .env (Settings → Doop Agent → Custom endpoint writes this file).',
+    )
+    return null
+  }
+  return {
+    provider: 'custom',
+    label: `${config.label} (${config.model})`,
+    vision: config.vision,
+    run: (req) =>
+      runChatCompletionsTurn(config, {
+        system: joinSystem(req),
+        tools: req.tools,
+        messages: req.messages,
+        maxTokens: req.maxTokens,
+      }),
+  }
+}
+
 const serverTiers: Record<ServerProvider, () => AgentModel | null> = {
   anthropic: anthropicTier,
   azure: azureTier,
+  custom: customTier,
 }
 
 /* an unknown DOOP_AGENT_PROVIDER fails at boot (server/env.ts) */

@@ -177,6 +177,32 @@ export interface ImageModelStatus {
   selected: boolean
 }
 
+/**
+ * The operator's custom OpenAI-compatible endpoint, as the settings API
+ * reports it. `hasKey` is the only thing the server says about the stored
+ * credential — the key itself is never sent back to the browser.
+ */
+export interface CustomEndpointStatus {
+  enabled: boolean
+  provider: string
+  url: string
+  model: string
+  label: string
+  vision: boolean
+  hasKey: boolean
+  /** the model actually serving turns, when this endpoint is in use */
+  active: string | null
+}
+
+export interface CustomEndpointInput {
+  url: string
+  model: string
+  label?: string
+  vision?: boolean
+  /** omit to keep the stored key, send '' to clear it */
+  apiKey?: string
+}
+
 export interface WebsiteImportResult {
   frames: Frame[]
   failures: { url: string; error: string }[]
@@ -445,6 +471,11 @@ export const api = {
   imageModels: () => req<{ models: ImageModelStatus[] }>('/api/image-model'),
   setImageModel: (model: string) =>
     req<{ models: ImageModelStatus[] }>('/api/image-model', { method: 'PUT', body: JSON.stringify({ model }) }),
+  /* the operator's custom OpenAI-compatible endpoint (admin only) */
+  customEndpoint: () => req<CustomEndpointStatus>('/api/custom-endpoint'),
+  saveCustomEndpoint: (input: CustomEndpointInput) =>
+    req<CustomEndpointStatus>('/api/custom-endpoint', { method: 'PUT', body: JSON.stringify(input) }),
+  clearCustomEndpoint: () => req<CustomEndpointStatus>('/api/custom-endpoint', { method: 'DELETE' }),
   addCard: (canvasId: string, title: string, agents: string[], attachments?: string[], scope?: CardScope) =>
     req(`/api/canvases/${canvasId}/cards`, {
       method: 'POST',
