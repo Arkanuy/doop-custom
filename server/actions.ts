@@ -141,6 +141,19 @@ function logActivity(canvasId: string, actor: Actor, message: string, frameId?: 
   broadcast(canvasId, { type: 'activity', item })
 }
 
+/**
+ * Append one step to the canvas activity feed.
+ *
+ * Same channel as `logActivity`, exported for the resident loop so a tool call
+ * becomes a visible line instead of a server-only console entry. Kept separate
+ * from `setAgentStatus` on purpose: the status line shows the CURRENT step and
+ * is replaced each time, while the feed is the history a human scrolls to see
+ * how a run got where it did.
+ */
+export function noteStep(canvasId: string, actor: Actor, message: string, frameId?: string) {
+  logActivity(canvasId, actor, message, frameId)
+}
+
 export function resolveActor(
   raw: { name?: string; kind?: string; clientId?: string; owner?: string } | undefined,
 ): Actor {

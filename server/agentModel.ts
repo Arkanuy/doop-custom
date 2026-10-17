@@ -226,6 +226,60 @@ export function serverTierAvailable(): boolean {
   return serverTiers[serverProvider()]() !== null
 }
 
+/* ---------------------------------------------------------------- */
+/* step narration                                                    */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Turn a raw tool name into a line a watching human understands.
+ *
+ * The canvas shows these verbatim, so they read as present-tense actions
+ * ("Screenshotting a frame") rather than identifiers ("screenshot_frame").
+ * Falls back to the raw name so a tool added later still surfaces instead of
+ * silently disappearing from the feed.
+ */
+const TOOL_NARRATION: Record<string, string> = {
+  get_guide: 'Reading the design guide',
+  get_canvas: 'Looking at the canvas',
+  create_canvas: 'Creating a canvas',
+  create_frame: 'Creating a frame',
+  get_frame: 'Reading a frame',
+  set_frame_html: 'Writing a frame',
+  append_frame_html: 'Streaming a design into a frame',
+  edit_frame_html: 'Editing a frame',
+  update_frame: 'Resizing or moving a frame',
+  delete_frame: 'Removing a frame',
+  screenshot_frame: 'Screenshotting a frame to review it',
+  get_frame_screenshot: 'Screenshotting a frame to review it',
+  export_frame: 'Exporting an image of a frame',
+  search_images: 'Searching for images',
+  search_icons: 'Searching for icons',
+  search_logos: 'Searching for a logo',
+  list_backgrounds: 'Browsing backgrounds',
+  generate_image: 'Generating an image',
+  upload_asset: 'Uploading an asset',
+  view_website: 'Reading a website',
+  import_webpage: 'Importing a webpage',
+  set_status: 'Posting a status',
+  get_comments: 'Reading comments',
+  reply_to_comment: 'Replying to a comment',
+  resolve_comment: 'Resolving a comment',
+  get_feedback: 'Reading feedback',
+  list_guidelines: 'Reading the style guidelines',
+  get_guidelines: 'Reading the style guidelines',
+  save_decision: 'Recording a decision',
+  get_reference: 'Reading a pinned reference',
+  search_inspiration: 'Looking for inspiration',
+}
+
+export function describeTool(name: string, _input?: unknown): string {
+  const base = TOOL_NARRATION[name]
+  if (base) return base
+  /* unknown tool: keep it visible, phrased as a step rather than an id, so a
+     tool added later surfaces in the feed instead of vanishing silently */
+  return `Using ${name.replace(/_/g, ' ')}`
+}
+
 const warnedAbout = new Set<string>()
 function warnOnce(message: string) {
   if (warnedAbout.has(message)) return

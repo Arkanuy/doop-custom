@@ -5,6 +5,7 @@ import {
   ModelAuthError,
   ModelConfigurationError,
   ModelUnavailableError,
+  describeTool,
   pickModel,
   serverTierAvailable,
 } from './agentModel.ts'
@@ -558,6 +559,13 @@ async function runAgent(canvasId: string, agentName: string, stalled: Set<string
           console.log(
             `[resident] response canvas=${canvasId} turn=${turnsUsed} stop=${res.stop_reason} tools=${toolBlocks.map((block) => block.name).join(',') || 'none'}`,
           )
+          /* A turn that only THINKS (text, no tool) is invisible otherwise:
+             the status line would still say whatever the previous tool said,
+             and a human watching would read that as "stuck". Say plainly that
+             the model is reasoning, and how far into the run it is. */
+          if (toolBlocks.length === 0 && !res.content.some((b) => b.type === 'text')) {
+            actions.setAgentStatus(canvasId, actor, `Thinking (step ${turnsUsed})`)
+          }
 
           /* A response can contain a complete tool_use block even when its stop
          reason is max_tokens. The Messages protocol still requires an
@@ -591,6 +599,19 @@ async function runAgent(canvasId: string, agentName: string, stalled: Set<string
                   const target = (block.input as Record<string, unknown>).frame_id
                   console.log(
                     `[resident] tool canvas=${canvasId} name=${block.name}${typeof target === 'string' ? ` frame=${target}` : ''}`,
+                  )
+                  /* Surface the step in the UI. The tool log above only ever
+                     reached the server console, so a watching human saw a
+                     spinner and a duration with no idea what the agent was
+                     doing. `setAgentStatus` drives the live per-agent line and
+                     `noteStep` appends to the activity feed, which is the
+                     console the canvas already renders. */
+                  actions.setAgentStatus(canvasId, actor, describeTool(block.name, block.input))
+                  actions.noteStep(
+                    canvasId,
+                    actor,
+                    describeTool(block.name, block.input),
+                    typeof target === 'string' ? target : undefined,
                   )
                   const result = await execTool(block, canvasId, actor, runState)
                   if (block.name === 'import_webpage' && result.is_error && !runState.blockedWebsiteAccess) {
