@@ -41,14 +41,18 @@ export function MeterLine({ allowance }: { allowance: Allowance | null }) {
   if (allowance.byoModel) {
     return (
       <span className="text-[12px] text-success-ink">
-        Doop Agent on your{' '}
-        {allowance.byoKind === 'gemini-cloud'
-          ? 'Gemini cloud connection'
-          : allowance.byoKind === 'claude-local'
-            ? 'local Claude CLI'
-            : allowance.byoKind === 'chatgpt' || !allowance.byoKind
-              ? 'ChatGPT'
-              : `${ACCOUNT_KIND_LABELS[allowance.byoKind]} key`}
+        Doop Agent on{' '}
+        {allowance.byoServerTier
+          ? 'this server’s endpoint'
+          : `your ${
+              allowance.byoKind === 'gemini-cloud'
+                ? 'Gemini cloud connection'
+                : allowance.byoKind === 'claude-local'
+                  ? 'local Claude CLI'
+                  : allowance.byoKind === 'chatgpt' || !allowance.byoKind
+                    ? 'ChatGPT'
+                    : `${ACCOUNT_KIND_LABELS[allowance.byoKind]} key`
+            }`}
       </span>
     )
   }

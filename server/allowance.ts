@@ -6,6 +6,7 @@ import { db } from './db/index.ts'
 import { residentUsage } from './db/schema.ts'
 import { oauthAccessToken } from './db/auth-schema.ts'
 import { getStatus } from './modelAccounts.ts'
+import { serverTierAvailable } from './agentModel.ts'
 import type { AccountKind } from './modelAccounts.ts'
 
 /**
@@ -37,6 +38,9 @@ export interface Allowance {
   byoModel: boolean
   /** which kind, for the UI copy */
   byoKind?: AccountKind | 'claude-local' | 'gemini-cloud'
+  /** the agent runs on this instance's own server-tier endpoint, so no plan
+   *  needs connecting; distinct from byoKind because no account is involved */
+  byoServerTier?: boolean
   /** the ChatGPT account's email, so the UI can name what is connected */
   byoEmail?: string
   /** the agent is running on this user's own account right now — connecting
@@ -72,11 +76,17 @@ export async function getAllowance(userId: string): Promise<Allowance> {
     getStatus(userId).catch(() => ({ connected: false }) as Awaited<ReturnType<typeof getStatus>>),
     getLocalAgentPreference(userId),
   ])
+  /* A server-tier endpoint the operator configured IS a model account — it
+     just belongs to the instance rather than to this user. Counting it here
+     is what makes DOOP_AGENT_PROVIDER=custom usable: without it the UI keeps
+     demanding "connect a plan" even though the agent has somewhere to run,
+     because none of the three conditions below is about the server tier. */
+  const serverTier = serverTierAvailable()
   return {
     used,
     limit: RESIDENT_TASK_LIMIT,
     connected,
-    byoModel: geminiCloud || local.enabled || model.connected,
+    byoModel: geminiCloud || local.enabled || model.connected || serverTier,
     ...(geminiCloud
       ? { byoKind: 'gemini-cloud' as const }
       : local.enabled
@@ -86,6 +96,7 @@ export async function getAllowance(userId: string): Promise<Allowance> {
           : {}),
     ...(!geminiCloud && model.email ? { byoEmail: model.email } : {}),
     onOwnAccount: geminiCloud || local.enabled || model.connected,
+    ...(serverTier && !geminiCloud && !local.enabled && !model.connected ? { byoServerTier: true } : {}),
   }
 }
 

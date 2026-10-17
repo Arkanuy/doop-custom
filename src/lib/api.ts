@@ -132,6 +132,9 @@ export interface Allowance {
   /** connected a model account the Doop Agent itself can run on */
   byoModel: boolean
   byoKind?: ModelAccountKind | 'claude-local' | 'gemini-cloud'
+  /** the agent runs on this instance's own server-tier endpoint (e.g. a
+   *  custom OpenAI-compatible endpoint), so nothing needs connecting */
+  byoServerTier?: boolean
   byoEmail?: string
   /** free tasks are spent and their own account is carrying the agent */
   onOwnAccount: boolean

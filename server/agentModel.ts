@@ -214,6 +214,18 @@ export function serverTierInfo(): { provider: ServerProvider; ready: boolean } {
   return { provider, ready: serverTiers[provider]() !== null }
 }
 
+/**
+ * Whether this instance has a usable server tier at all.
+ *
+ * The Settings panel gates on this: with a working server tier the agent has
+ * somewhere to run, so the "connect a plan" wall must not appear just because
+ * the *user* connected nothing. Cheap enough to call per request — it reads
+ * env and, for the custom provider, builds a config object.
+ */
+export function serverTierAvailable(): boolean {
+  return serverTiers[serverProvider()]() !== null
+}
+
 const warnedAbout = new Set<string>()
 function warnOnce(message: string) {
   if (warnedAbout.has(message)) return
