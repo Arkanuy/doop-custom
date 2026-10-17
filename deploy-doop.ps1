@@ -82,8 +82,8 @@ $urlDefault = 'http://43.133.33.248:20128/v1/chat/completions'
 if ($existing['DOOP_CUSTOM_CHAT_URL']) { $urlDefault = $existing['DOOP_CUSTOM_CHAT_URL'] }
 $url = Read-Host "  Endpoint URL [Enter = $urlDefault]"
 if (-not $url) { $url = $urlDefault }
-# 3) auth URL publik (untuk OAuth redirect; ganti kalau subdomain beda)
-$authDefault = 'https://doop.mafiablox.com'
+# 3) auth URL publik (untuk OAuth redirect) — IP+port, tanpa subdomain
+$authDefault = "http://43.133.33.248:$Port"
 if ($existing['BETTER_AUTH_URL']) { $authDefault = $existing['BETTER_AUTH_URL'] }
 $authUrl = Read-Host "  BETTER_AUTH_URL publik [Enter = $authDefault]"
 if (-not $authUrl) { $authUrl = $authDefault }
@@ -117,6 +117,14 @@ foreach ($k in $existing.Keys) {
     if (-not $already) { $lines += "$k=$($existing[$k])" }
 }
 Set-Content -Path $envPath -Value $lines -Encoding UTF8
+# Node's --env-file parser chokes on a UTF-8 BOM (PowerShell 5.1 writes one
+# with -Encoding UTF8), so strip it — the first key would otherwise be read as
+# "\ufeffNODE_ENV" and silently ignored.
+$bytes = [System.IO.File]::ReadAllBytes($envPath)
+if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+    [System.IO.File]::WriteAllBytes($envPath, $bytes[3..($bytes.Length - 1)])
+    Write-Host '  BOM dihapus dari .env.'
+}
 Write-Host "  .env ditulis ($($lines.Count) baris)."
 
 Write-Host '=== 5/6 Scheduled task (autostart + auto-restart) ===' -ForegroundColor Cyan
@@ -128,12 +136,23 @@ New-Item -ItemType Directory -Force -Path C:\doop\logs | Out-Null
 while ($true) {
     $env:NODE_ENV = 'production'
     $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    Add-Content C:\doop\logs\server.log "[$stamp] starting doop…"
-    npx tsx server/index.ts 2>&1 | Add-Content C:\doop\logs\server.log
-    Add-Content C:\doop\logs\server.log "[$stamp] exited — restart in 5s"
+    Add-Content C:\doop\logs\server.log "[$stamp] starting doop..."
+    # --env-file-if-exists is REQUIRED: server/env.ts refuses to boot in
+    # production without BETTER_AUTH_SECRET/BETTER_AUTH_URL, and those live in
+    # .env. Without this flag the process exits instantly and the loop just
+    # writes "starting -> exited" forever with no error trace.
+    cmd /c "npx tsx --env-file-if-exists=.env server/index.ts >> C:\doop\logs\server.log 2>&1"
+    Add-Content C:\doop\logs\server.log "[$stamp] exited - restart in 5s"
     Start-Sleep 5
 }
 '@ | Set-Content -Path $startScript -Encoding UTF8
+
+# same BOM problem as .env: PowerShell 5.1 writes one, and it breaks the
+# script's first line at parse time on older hosts
+$sb = [System.IO.File]::ReadAllBytes($startScript)
+if ($sb.Length -ge 3 -and $sb[0] -eq 0xEF -and $sb[1] -eq 0xBB -and $sb[2] -eq 0xBF) {
+    [System.IO.File]::WriteAllBytes($startScript, $sb[3..($sb.Length - 1)])
+}
 
 $taskName = 'DoopCanvas'
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -156,15 +175,20 @@ foreach ($i in 1..24) {
     } catch { }
 }
 if ($ok) {
-    Write-Host "  OK — Doop hidup di http://localhost:$Port" -ForegroundColor Green
+    Write-Host "  OK - Doop hidup di http://localhost:$Port" -ForegroundColor Green
     Write-Host ''
-    Write-Host 'SISA LANGKAH (bisa dari browser HP):' -ForegroundColor Yellow
-    Write-Host '  1. Cloudflare Zero Trust -> Networks -> Tunnels -> tunnel aktif'
-    Write-Host '     -> Public Hostname -> Add:  doop.mafiablox.com  ->  http://localhost:4400'
-    Write-Host '  2. Buka https://doop.mafiablox.com — daftar akun (1 akun saja!)'
-    Write-Host '  3. Settings -> Agent keys -> New key — kirim token barunya ke Arkan'
-    Write-Host '     (token itu dipakai Hermes MCP dari laptop)'
-    Write-Host "  4. Log: Get-Content C:\doop\logs\server.log -Tail 50"
+    Write-Host 'AKSES: pakai IP + port (tanpa subdomain).' -ForegroundColor Yellow
+    Write-Host '  1. Buka firewall untuk port ini (sekali saja):'
+    Write-Host "       netsh advfirewall firewall add rule name=`"Doop 4400`" dir=in action=allow protocol=TCP localport=$Port"
+    Write-Host '  2. Cek juga Security Group / firewall panel VPS — buka TCP 4400 inbound.'
+    Write-Host "  3. Dari mana saja:  http://43.133.33.248:$Port"
+    Write-Host '  4. Daftar akun (1 akun saja!) -> Settings -> Agent keys -> New key'
+    Write-Host '     Kirim token itu ke Arkan (dipakai Hermes MCP dari laptop).'
+    Write-Host "  5. Log: Get-Content C:\doop\logs\server.log -Tail 50"
+    Write-Host ''
+    Write-Host 'CATATAN PENTING (jangan dilewat):' -ForegroundColor Red
+    Write-Host '  Tanpa HTTPS, jangan pakai password yang sama dengan akun lain.'
+    Write-Host '  Siapa pun yang tahu IP:4400 bisa mencoba login.'
 } else {
-    Write-Host '  GAGAL — cek Get-Content C:\doop\logs\server.log -Tail 60' -ForegroundColor Red
+    Write-Host '  GAGAL - cek Get-Content C:\doop\logs\server.log -Tail 60' -ForegroundColor Red
 }
