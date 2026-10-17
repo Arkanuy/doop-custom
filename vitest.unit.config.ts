@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
  */
 export default defineConfig({
   test: {
-    include: ['tests/env.test.ts', 'tests/modelMenu*.test.ts'],
+    include: ['tests/env.test.ts', 'tests/modelMenu*.test.ts', 'tests/completeHtml.test.ts'],
     globalSetup: [],
     setupFiles: [],
   },
