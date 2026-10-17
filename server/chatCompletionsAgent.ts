@@ -214,11 +214,20 @@ interface CompletionBody {
   choices?: {
     finish_reason?: string
     message?: {
+      role?: string
       content?: string | null
       refusal?: string | null
       tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[]
     }
   }[]
+}
+
+/** A tool call as it arrives mid-stream: same shape, plus its slot index. */
+interface StreamingToolCall {
+  index?: number
+  id?: string
+  type?: 'function'
+  function?: { name?: string; arguments?: string }
 }
 
 function fromCompletion(body: CompletionBody, label: string): TurnResult {
@@ -275,7 +284,80 @@ export async function runChatCompletionsTurn(config: ChatCompletionsConfig, req:
     }),
   })
   if (!res.ok) throw await responseError(res, config.label)
-  return fromCompletion((await res.json()) as CompletionBody, config.label)
+  return fromCompletion(parseCompletionBody(await res.text(), config.label), config.label)
+}
+
+/**
+ * Parse a Chat Completions response body that may carry SSE framing even
+ * though we asked for a single JSON object.
+ *
+ * Gateways in front of the real API (9Router, and by extension anything
+ * OpenAI-compatible that proxies upstream) can answer `text/event-stream`
+ * regardless of the request, and some append a bare `data: [DONE]` line with
+ * no newline between it and the JSON: `{...}data: [DONE]`. `res.json()` then
+ * dies on "Unexpected non-whitespace character after JSON".
+ *
+ * So: take the text, drop any trailing `data:` sentinel, and when the body is
+ * genuinely a stream (multiple `data:` events) collect the deltas into one
+ * message instead of hoping a single chunk holds everything.
+ */
+function parseCompletionBody(raw: string, label: string): CompletionBody {
+  const text = raw.trim()
+  if (!text) throw new Error(`${label} returned an empty response body`)
+
+  /* the common shapes first: plain JSON, possibly with a sentinel glued on */
+  const sentinel = text.search(/data:\s*\[DONE\]/)
+  if (sentinel !== -1) {
+    const head = text.slice(0, sentinel).trim()
+    if (head.startsWith('{')) return JSON.parse(head) as CompletionBody
+    /* nothing but the sentinel — fall through to the SSE collector */
+  } else if (text.startsWith('{')) {
+    try {
+      return JSON.parse(text) as CompletionBody
+    } catch (err) {
+      /* a stream whose first event is a JSON object: fall through */
+      if (!text.includes('\ndata:')) throw err
+    }
+  }
+
+  /* SSE: concatenate every `data:` payload into one completion */
+  const events = text
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .filter((payload) => payload && payload !== '[DONE]')
+  if (!events.length) {
+    throw new Error(`${label} returned a response that is neither JSON nor SSE`)
+  }
+
+  const merged: CompletionBody = { choices: [{ message: { role: 'assistant', content: '' } }] }
+  const choice = merged.choices![0]!
+  const message = choice.message!
+  for (const event of events) {
+    const chunk = JSON.parse(event) as CompletionBody & {
+      choices?: { delta?: { content?: string | null; tool_calls?: StreamingToolCall[] } }[]
+    }
+    const first = chunk.choices?.[0]
+    if (!first) continue
+    /* non-streamed chunks carry `message`, streamed ones carry `delta` */
+    const delta = (first.message ?? first.delta) as
+      { content?: string | null; tool_calls?: StreamingToolCall[] } | undefined
+    if (!delta) continue
+    if (delta.content) message.content = (message.content ?? '') + delta.content
+    if (delta.tool_calls?.length) {
+      /* tool calls stream by index; merge arguments onto the matching entry */
+      message.tool_calls ??= []
+      for (const call of delta.tool_calls) {
+        const at = call.index ?? message.tool_calls.length
+        const existing = message.tool_calls[at]
+        if (existing)
+          existing.function!.arguments = (existing.function!.arguments ?? '') + (call.function?.arguments ?? '')
+        else message.tool_calls[at] = call
+      }
+    }
+    if (first.finish_reason) choice.finish_reason = first.finish_reason
+  }
+  return merged
 }
 
 /* exported for tests */
