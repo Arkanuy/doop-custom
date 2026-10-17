@@ -172,10 +172,43 @@ function verificationFrameIds(runState: RunState): string[] {
   return [...new Set([...runState.mutatedFrames, ...runState.verificationFrames])]
 }
 
+/**
+ * Salvage a complete HTML document from whatever the model returned.
+ *
+ * Models routinely wrap the document in prose or markdown fences, or append a
+ * closing commentary after `</html>`: measured on this instance, one design in
+ * five came back with 763 characters of explanation glued to the end. The
+ * previous contract here — "must END in </html>, else reject" — turned that
+ * into a failed call, and the tail survived into the frame on whatever path
+ * skipped the check, which renders as stray text under the design.
+ *
+ * So: cut everything after `</html>` and everything before the doctype (or the
+ * opening `<html>`), drop code fences, and only reject when there is no
+ * document at all. Cleaning beats rejecting: the model's HTML is usually
+ * correct, it is the packaging that is noisy.
+ */
 function completeHtml(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
-  const html = value.trim()
-  if (html.length < 80 || !/<html(?:\s|>)/i.test(html) || !/<\/html>\s*$/i.test(html)) return undefined
+  let html = value.trim()
+  if (!html) return undefined
+
+  /* markdown fence around the document */
+  const fence = html.match(/^```(?:html)?\s*\n([\s\S]*?)\n?```\s*$/i)
+  if (fence?.[1]) html = fence[1].trim()
+
+  /* trim to the document itself */
+  const doctypeAt = html.search(/<!doctype\s+html/i)
+  const htmlTagAt = html.search(/<html(?:\s|>)/i)
+  const startAt = doctypeAt !== -1 ? doctypeAt : htmlTagAt
+  if (startAt === -1) return undefined
+  html = html.slice(startAt)
+
+  /* drop anything after the closing tag */
+  const closeAt = html.search(/<\/html>/i)
+  if (closeAt !== -1) html = html.slice(0, closeAt + '</html>'.length)
+
+  html = html.trim()
+  if (html.length < 80 || !/<html(?:\s|>)/i.test(html) || !/<\/html>$/i.test(html)) return undefined
   return html
 }
 

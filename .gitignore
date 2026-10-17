@@ -13,3 +13,6 @@ desktop/src-tauri/gen
 .claude/settings.local.json
 .claude/.current-tool
 chatgpt-plugin/dist/
+
+# backtest harness output (rendered designs, not source)
+/backtest/
