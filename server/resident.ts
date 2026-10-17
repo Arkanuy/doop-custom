@@ -1,7 +1,13 @@
 import { env } from './env.ts'
 import type Anthropic from '@anthropic-ai/sdk'
 import { store } from './store.ts'
-import { ModelAuthError, ModelConfigurationError, ModelUnavailableError, pickModel } from './agentModel.ts'
+import {
+  ModelAuthError,
+  ModelConfigurationError,
+  ModelUnavailableError,
+  pickModel,
+  serverTierAvailable,
+} from './agentModel.ts'
 import { RESIDENT_TASK_LIMIT } from './allowance.ts'
 import * as actions from './actions.ts'
 import { inspectFrame, renderFrame } from './screenshot.ts'
@@ -225,9 +231,12 @@ async function runAgent(canvasId: string, agentName: string, stalled: Set<string
   /* With no free tier, the server's key never pays for resident work. Work
      can still reach this point without a payable account — queued before the
      account was disconnected, or before metering tightened — and it must
-     fail visibly with a fix, not crash on a key that was never meant to pay. */
+     fail visibly with a fix, not crash on a key that was never meant to pay.
+     A ready server tier is the operator's own credential, so it counts: the
+     work has somewhere to run even though no *user* connected anything and
+     no free tasks were granted. */
   const actor = actions.resolveActor({ name: role.name, kind: 'agent' })
-  if (!model.userId && RESIDENT_TASK_LIMIT <= 0) {
+  if (!model.userId && RESIDENT_TASK_LIMIT <= 0 && !serverTierAvailable()) {
     const reason =
       'The Doop Agent needs a connected account — connect your ChatGPT subscription or an OpenAI, OpenRouter, Gemini or Claude API key in Settings, then retry.'
     for (const f of actions.takeFeedbackFor(canvasId, role.name, payer)) actions.failTaskFeedback(f.id, reason)
