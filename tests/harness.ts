@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -14,6 +14,46 @@ import WebSocket from 'ws'
  */
 
 const ROOT = process.cwd() // vitest runs from the repo root
+
+/**
+ * Kill every test server this process started.
+ *
+ * `stop()` is the normal path, but a test that throws before reaching it (or a
+ * hook timeout) leaves its server running — observed as 85 orphaned servers
+ * after a suite, several holding ~100 MB, which then starved later runs of
+ * memory and ports and made them fail for reasons unrelated to the code.
+ * Registered on `beforeExit` and on the signals vitest forwards, so the
+ * process tree dies with the worker either way. Each pid is killed with
+ * `/T` so the whole npx -> tsx -> server chain goes, not just its head.
+ */
+const liveServers = new Set<number>()
+
+function killAllServers(): void {
+  for (const pid of liveServers) {
+    if (process.platform === 'win32') {
+      try {
+        spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+        continue
+      } catch {
+        /* fall through */
+      }
+    }
+    try {
+      process.kill(pid)
+    } catch {
+      /* already gone */
+    }
+  }
+  liveServers.clear()
+}
+
+process.once('beforeExit', killAllServers)
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    killAllServers()
+    process.exit(0)
+  })
+}
 
 /** the last process started on each data directory, so a reboot can wait for it */
 const exits = new Map<string, Promise<void>>()
@@ -96,6 +136,7 @@ async function boot(env: Record<string, string>, reuseDir: string | undefined, t
         stdio: ['ignore', 'pipe', 'ignore'],
       },
     )
+    if (proc.pid) liveServers.add(proc.pid)
     const stopped = new Promise<void>((resolve) => proc.once('exit', () => resolve()))
     exits.set(dataDir, stopped)
     const bound = await waitForBind(proc, port)
@@ -121,11 +162,40 @@ async function boot(env: Record<string, string>, reuseDir: string | undefined, t
       dataDir,
       stopped,
       stop({ keepData }: { keepData?: boolean } = {}) {
-        proc.kill()
+        if (proc.pid) liveServers.delete(proc.pid)
+        killTree(proc)
         if (!keepData) removeDataDir(dataDir, stopped)
       },
     }
   }
+}
+
+/**
+ * Kill the test server and everything it spawned.
+ *
+ * `proc.kill()` reaches only the immediate child. The harness launches the
+ * server through `npx tsx`, so the real process tree is
+ * npx.cmd -> node(npx) -> node(tsx) -> node(server), and killing the head
+ * leaves the rest running: on Windows those survivors hold their PGlite
+ * handles (hence the EPERM on the temp dir) and pile up across a suite — an
+ * observed run left 85 orphaned servers behind, several holding ~100 MB, which
+ * then starved later tests of memory and ports.
+ *
+ * taskkill /T walks the tree; the direct signal stays as the fallback for
+ * non-Windows hosts where /T does not exist.
+ */
+function killTree(proc: ChildProcess): void {
+  const pid = proc.pid
+  if (!pid) return
+  if (process.platform === 'win32') {
+    try {
+      spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+      return
+    } catch {
+      /* fall through to the signal below */
+    }
+  }
+  proc.kill()
 }
 
 /**
