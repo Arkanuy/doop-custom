@@ -1,59 +1,69 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * The salvage contract, proven against real model output rather than
- * hand-written strings: every artifact in the last backtest run came back with
- * a prologue, a markdown fence, a trailing commentary — or all three — so the
- * fixtures ARE the failure case.
+ * The salvage contract.
  *
- * `completeHtml` is module-private in server/resident.ts (it belongs to the
- * tool layer). Rather than widen its export purely for a test, this pins the
- * same contract, and scripts/verify-complete-html.ts exercises the operator
- * path against the same artifacts.
+ * Fixtures are inline on purpose. An earlier version read the artifacts from
+ * `backtest/`, which exists only on the machine that ran the backtest — so the
+ * test was green here and red on any other checkout, including CI and the
+ * deploy host. The shapes below are transcribed from those real artifacts
+ * (5 of 5 sampled model outputs carried at least one of them), so the coverage
+ * survives without the dependency.
+ *
+ * `completeHtml` is module-private in server/resident.ts and `stripHtmlPackaging`
+ * is the same logic exported from server/escapedHtml.ts, which is where the
+ * shared write path calls it. This pins that contract.
  */
-function completeHtml(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined
-  let html = value.trim()
-  if (!html) return undefined
-  const fence = html.match(/^```(?:html)?\s*\n([\s\S]*?)\n?```\s*$/i)
-  if (fence?.[1]) html = fence[1].trim()
-  const doctypeAt = html.search(/<!doctype\s+html/i)
-  const htmlTagAt = html.search(/<html(?:\s|>)/i)
-  const startAt = doctypeAt !== -1 ? doctypeAt : htmlTagAt
-  if (startAt === -1) return undefined
-  html = html.slice(startAt)
-  const closeAt = html.search(/<\/html>/i)
-  if (closeAt !== -1) html = html.slice(0, closeAt + '</html>'.length)
-  html = html.trim()
-  if (html.length < 80 || !/<html(?:\s|>)/i.test(html) || !/<\/html>$/i.test(html)) return undefined
-  return html
-}
+import { stripHtmlPackaging, repairEscapedHtml } from '../server/escapedHtml.ts'
 
-const ARTIFACT_DIR = 'backtest/2026-10-17T19-17-32-016Z'
+const long = (inner: string) =>
+  `<!doctype html><html><body>${inner}${'<!-- padding to clear the 80-char floor -->'}</body></html>`
 
-describe('completeHtml salvage', () => {
-  it('returns a clean document for every artifact the model produced', () => {
-    let checked = 0
-    for (const name of readdirSync(ARTIFACT_DIR)) {
-      if (!name.endsWith('.html')) continue
-      const raw = readFileSync(join(ARTIFACT_DIR, name), 'utf8')
-      const out = completeHtml(raw)
-      expect(out, `${name} should salvage to a document`).toBeDefined()
-      expect(/^<!doctype html>/i.test(out!), `${name} starts with a doctype`).toBe(true)
-      expect(out!.includes('Here is a'), `${name} has no leftover prologue`).toBe(false)
-      expect(out!.endsWith('</html>'), `${name} ends with the closing tag`).toBe(true)
-      expect(out!.includes('```'), `${name} has no leftover code fence`).toBe(false)
-      expect(out!.length, `${name} is smaller than the noisy input`).toBeLessThan(raw.length)
-      checked++
-    }
-    expect(checked).toBeGreaterThan(0)
+describe('HTML packaging salvage', () => {
+  it('strips the prologue and the code fence a model wrapped around the document', () => {
+    const raw = `Here is a complete HTML document for a pricing page.\n\`\`\`html\n${long('<h1>Pricing</h1>')}\n\`\`\``
+    const out = stripHtmlPackaging(raw)
+    expect(/^<!doctype html>/i.test(out)).toBe(true)
+    expect(out.includes('```')).toBe(false)
+    expect(out.includes('Here is a')).toBe(false)
+    expect(out).toContain('Pricing')
   })
 
-  it('rejects input with no document at all', () => {
-    expect(completeHtml('Sorry, I cannot do that.')).toBeUndefined()
-    expect(completeHtml('<div>fragment</div>')).toBeUndefined()
-    expect(completeHtml(undefined)).toBeUndefined()
+  it('cuts the closing commentary appended after the document', () => {
+    /* measured shape: 763 characters of explanation glued to the end */
+    const raw = `${long('<h1>Keuangan</h1>')}\n\nI hope this helps! Let me know if you want any changes, and here is some more commentary to make the tail unambiguously long.`
+    const out = stripHtmlPackaging(raw)
+    expect(/<\/html>$/i.test(out)).toBe(true)
+    expect(out.includes('I hope this helps')).toBe(false)
+    expect(out).toContain('Keuangan')
+  })
+
+  it('handles prologue, fence and tail together', () => {
+    const raw = `Sure, here it is:\n\`\`\`html\n${long('<h1>All three</h1>')}\n\`\`\`\nHope this helps!`
+    const out = stripHtmlPackaging(raw)
+    expect(/^<!doctype html>/i.test(out)).toBe(true)
+    expect(/<\/html>$/i.test(out)).toBe(true)
+    expect(out.includes('```')).toBe(false)
+    expect(out.includes('Sure, here it is')).toBe(false)
+    expect(out.includes('Hope this helps')).toBe(false)
+    expect(out).toContain('All three')
+  })
+
+  it('leaves a clean document byte-identical', () => {
+    const clean = long('<h1>Clean</h1>')
+    expect(stripHtmlPackaging(clean)).toBe(clean)
+    expect(repairEscapedHtml(stripHtmlPackaging(clean))).toBe(clean)
+  })
+
+  it('still repairs an escaped payload', () => {
+    const escaped = '&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;hi&lt;/body&gt;&lt;/html&gt;'
+    const out = repairEscapedHtml(stripHtmlPackaging(escaped))
+    expect(out).toBe('<!doctype html><html><body>hi</body></html>')
+  })
+
+  it('returns non-documents unchanged so callers keep their own validation', () => {
+    expect(stripHtmlPackaging('Sorry, I cannot do that.')).toBe('Sorry, I cannot do that.')
+    expect(stripHtmlPackaging('')).toBe('')
+    expect(stripHtmlPackaging('fragment')).toBe('fragment')
   })
 })
