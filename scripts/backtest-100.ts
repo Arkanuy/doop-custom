@@ -16,6 +16,8 @@ import { mkdirSync, writeFileSync, appendFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
 import { customChatConfig, runTextCompletion } from '../server/chatCompletionsAgent.ts'
+import { ensureDocumentHead, repairEscapedHtml, stripHtmlPackaging } from '../server/escapedHtml.ts'
+import { emojiAudit } from '../server/emojiIcons.ts'
 
 const require = createRequire(import.meta.url)
 const anti = require('D:/tools/designer-mcp/dist/anti-patterns.js')
@@ -75,6 +77,8 @@ interface Row {
   a11yGrade?: string
   a11yIssues?: number
   a11ySerious?: number
+  emojiCount?: number
+  emojiChars?: string[]
   hasTitle?: boolean
   hasLang?: boolean
   error?: string
@@ -94,7 +98,12 @@ for (let i = 0; i < RUNS; i++) {
         'Realistic content, a deliberate palette, strong typographic hierarchy, and a non-empty <title> with lang on <html>.',
       16000,
     )
-    const wrap = /<!doctype html/i.test(html) ? html : `<!doctype html><html><body>${html}</body></html>`
+    /* Run it through the same salvage the server applies before storing a
+       frame. Without this the harness measures raw model output, and a stray
+       ```html fence scores the design 1/F on accessibility — which says
+       nothing about Doop, whose write path strips exactly that. */
+    const stored = ensureDocumentHead(stripHtmlPackaging(repairEscapedHtml(html)), prompt)
+    const wrap = /<!doctype html/i.test(stored) ? stored : `<!doctype html><html><body>${stored}</body></html>`
     const slop = anti.runSlopTest(wrap) as { total: number; passed: number; gates: { id: number; pass: boolean }[] }
     const ax = a11y.auditA11y(wrap) as {
       score: number
@@ -114,6 +123,10 @@ for (let i = 0; i < RUNS; i++) {
       a11yGrade: ax.grade,
       a11yIssues: ax.issue_count.total,
       a11ySerious: ax.issue_count.serious,
+      ...(() => {
+        const e = emojiAudit(wrap)
+        return e.pass ? { emojiCount: 0, emojiChars: [] } : { emojiCount: e.count, emojiChars: e.distinct.slice(0, 6) }
+      })(),
       hasTitle: /<title[^>]*>[^<\s]/i.test(wrap),
       hasLang: /<html[^>]*\slang=/i.test(wrap),
     }
@@ -148,6 +161,8 @@ console.log(`slop  mean=${mean(nums((r) => r.slopPassed!))}/${ok[0]?.slopTotal ?
 console.log(`a11y  mean=${mean(nums((r) => r.a11yScore!))}  median=${median(nums((r) => r.a11yScore!))}  min=${nums((r) => r.a11yScore!)[0]}`)
 console.log(`grade A=${pct(ok.filter((r) => r.a11yGrade === 'A').length, ok.length)}%  B=${pct(ok.filter((r) => r.a11yGrade === 'B').length, ok.length)}%  C+=${pct(ok.filter((r) => /[C-F]/.test(r.a11yGrade ?? '')).length, ok.length)}%`)
 console.log(`serious issues: ${ok.filter((r) => (r.a11ySerious ?? 0) > 0).length}/${ok.length} designs have at least one`)
+const emojiPages = ok.filter((r) => (r.emojiCount ?? 0) > 0)
+console.log(`emoji icons: ${emojiPages.length}/${ok.length} designs (${pct(emojiPages.length, ok.length)}%), worst ${Math.max(0, ...ok.map((r) => r.emojiCount ?? 0))}`)
 console.log(`title present=${pct(ok.filter((r) => r.hasTitle).length, ok.length)}%  lang present=${pct(ok.filter((r) => r.hasLang).length, ok.length)}%`)
 console.log(`avg seconds=${Math.round(mean(nums((r) => r.ms)) / 1000)}`)
 
