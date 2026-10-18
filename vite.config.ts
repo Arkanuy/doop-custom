@@ -19,6 +19,12 @@ export default defineConfig({
     /* seven files drive a real Chromium; closing one under a full parallel
        run can outlast the 10s default */
     hookTimeout: 30_000,
+    /* A test that boots the server pays for a PGlite migration before it can
+       assert anything. On a cold or loaded machine that alone can pass 5s, so
+       the default timeout failed tests that were merely slow — measured here
+       as three of them, each passing when run under a raised limit. 30s
+       matches hookTimeout and still fails a genuinely hung test. */
+    testTimeout: 30_000,
   },
   resolve: {
     alias: {

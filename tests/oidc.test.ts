@@ -15,6 +15,17 @@ import { Client, startServer, type Server } from './harness.ts'
 
 const ROOT = process.cwd()
 
+/**
+ * The tsx entry point to spawn, named for this platform.
+ *
+ * `node_modules/.bin/tsx` is a shell script on POSIX and a `.cmd` shim on
+ * Windows; spawning the extensionless path on Windows throws EINVAL, which the
+ * test observed as a timeout rather than a failure with a cause.
+ */
+function tsxLauncher(): string {
+  return path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx')
+}
+
 /* the one hardcoded port left: this process refuses to boot and never binds it */
 const PORT_BOOT_REFUSAL = 4972
 
@@ -79,7 +90,7 @@ describe('boot-time refusal on partial OIDC config', () => {
      this spawns directly and asserts the process exits on its own. */
   it('exits rather than boot when only some of the three required vars are set', async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), 'doop-test-'))
-    const proc = spawn(path.join(ROOT, 'node_modules', '.bin', 'tsx'), [path.join(ROOT, 'server', 'index.ts')], {
+    const proc = spawn(tsxLauncher(), [path.join(ROOT, 'server', 'index.ts')], {
       cwd: dataDir,
       env: {
         ...process.env,
@@ -89,6 +100,9 @@ describe('boot-time refusal on partial OIDC config', () => {
         // OIDC_CLIENT_ID / OIDC_CLIENT_SECRET deliberately left unset
       },
       stdio: 'ignore',
+      /* a .cmd shim needs a shell on Windows; without it spawn throws EINVAL
+         and the test hangs until its timeout instead of asserting anything */
+      shell: process.platform === 'win32',
     })
     try {
       const exitCode = await new Promise<number | null>((resolve) => proc.on('exit', resolve))

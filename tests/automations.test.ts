@@ -69,10 +69,18 @@ describe('normalize', () => {
       minute: 0,
       tz: 'UTC',
     })
-    /* the clock reads in the runner's locale: 16:00 or 4:00 PM */
-    expect(describeSchedule(normalizeSchedule({ kind: 'weekly', weekday: 5, hour: 16, minute: 0 }))).toMatch(
-      /^Every Friday at (16:00|4:00 PM)$/,
-    )
+    /* The clock is deliberately locale-aware (see clockTime), so the separator
+       is ":" in en-US, "." in id-ID, and could be anything else elsewhere —
+       an earlier assertion listed only the two English forms and failed on a
+       machine whose locale writes 16.00. Assert the shape instead: the right
+       day, and a 16:00-equivalent time, without dictating the punctuation. */
+    const label = describeSchedule(normalizeSchedule({ kind: 'weekly', weekday: 5, hour: 16, minute: 0 }))
+    expect(label).toMatch(/^Every Friday at \d{1,2}[.:]\d{2}( ?[AP]M)?$/)
+    if (/([AP]M)$/.test(label)) {
+      expect(label).toMatch(/4[.:]00 ?PM$/)
+    } else {
+      expect(label).toMatch(/16[.:]00$/)
+    }
   })
 
   it('keeps only real steps, with real roles', () => {
