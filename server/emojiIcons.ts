@@ -14,9 +14,13 @@
 
 /* Symbol/pictograph planes plus the dingbat and misc-symbol blocks that
    emoji presentation actually draws from. Deliberately excludes the plain
-   arrow and geometric ranges: '→' and '•' are legitimate typography. */
-const EMOJI_RE =
-  /[\u{1F000}-\u{1FAFF}\u{1F900}-\u{1F9FF}\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{1F1E6}-\u{1F1FF}]/u
+   arrow and geometric ranges: '→' and '•' are legitimate typography.
+   U+FE0F (the variation selector that makes a character emoji-presented) is
+   matched separately rather than inside the class — a combining mark in a
+   character class behaves inconsistently across engines. */
+const EMOJI_BASE_RE =
+  /[\u{1F000}-\u{1FAFF}\u{1F900}-\u{1F9FF}\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}]/u
+const VARIATION_SELECTOR = /\uFE0F/
 
 /* Regions whose text is content, not chrome: a message someone typed, a post
    being previewed. An emoji there is the user's, not the designer's. */
@@ -39,9 +43,12 @@ export interface EmojiFinding {
 export function findFunctionalEmoji(html: string): EmojiFinding[] {
   let scannable = html
   for (const re of CONTENT_REGIONS) scannable = scannable.replace(re, '')
+  /* drop the emoji-presentation selectors before scanning, so a bare U+FE0F
+     is not itself reported as a character */
+  scannable = scannable.replace(new RegExp(VARIATION_SELECTOR.source, 'gu'), '')
 
   const findings: EmojiFinding[] = []
-  for (const match of scannable.matchAll(new RegExp(EMOJI_RE, 'gu'))) {
+  for (const match of scannable.matchAll(new RegExp(EMOJI_BASE_RE.source, 'gu'))) {
     const at = match.index ?? 0
     const around = scannable.slice(Math.max(0, at - 60), at + 60).replace(/\s+/g, ' ')
     findings.push({
