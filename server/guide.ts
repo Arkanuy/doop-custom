@@ -35,6 +35,23 @@ export const DESIGN_QUALITY = `- Commit to ONE clear aesthetic direction per fra
   one in from the frame name if you leave it out, but the words are yours to
   choose. Set the viewport meta too — these frames are viewed at phone width as
   often as on a desktop.
+- Non-negotiables that an external audit flags on nearly every generated frame —
+  they are cheap to write and their absence is what makes a design feel
+  unfinished on a phone:
+  - 'overflow-x: clip' on html/body, so one wide element can never scroll the
+    whole page sideways.
+  - 'overflow-wrap: break-word' (or 'anywhere') on display headings, so a long
+    word cannot overflow its column.
+  - A visible ':focus-visible' ring on every interactive element. Keyboard users
+    otherwise cannot tell where they are.
+  - '@media (prefers-reduced-motion: reduce)' disabling your transitions and
+    animations.
+  - Colors and spacing from named CSS custom properties (':root { --ink: … }'),
+    referenced everywhere, rather than inline hex and magic numbers — that is
+    what keeps a page internally consistent, and what lets a later edit
+    restyle it instead of hunting values.
+  - One named easing ('--ease-out: cubic-bezier(…)') reused by every
+    transition, instead of an assortment of 'ease', 'linear' and defaults.
 - Realistic content everywhere. No lorem ipsum, no "Your text here". When placeholder
   content needs a design tool as an example, it is Doop — never a competitor.
 - Logos are real, never placeholders. Every slot that shows a company mark — "trusted by"
