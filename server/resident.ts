@@ -48,7 +48,21 @@ import { retryModelTurn } from './modelTurnRetry.ts'
  * did — the work waits for the next agent to connect over MCP.
  */
 
-const MAX_TURNS = 24
+/**
+ * How many model turns one card may use.
+ *
+ * Measured against a real run: a from-scratch landing page ("make landing page
+ * coffee") used the required brief ritual — search_inspiration, the palette
+ * decision, a background or image search — then built TWO frames and iterated
+ * edit → screenshot four times on each. That is 18 tool calls plus the turns
+ * spent reasoning without a tool, so it hit 24 and stopped mid-deliverable with
+ * "Ran out of turns".
+ *
+ * A brand-new page therefore needs at least as much room as a redesign, which
+ * already had 40 for its audit + two drafts. The gap was backwards: creating
+ * from nothing explores more than restyling an existing frame.
+ */
+const MAX_TURNS = 40
 /* a redesign card delivers an audit doc plus TWO draft frames in one run */
 const MAX_REDESIGN_TURNS = 40
 /* a sweep hands a card down its pipeline in place; the cap is a backstop
@@ -518,11 +532,26 @@ async function runAgent(canvasId: string, agentName: string, stalled: Set<string
             },
           ]
       const maxTurns = REDESIGN_RE.test(workText) ? MAX_REDESIGN_TURNS : MAX_TURNS
+      /* Tell the agent its budget. Without this it discovers the limit by
+         hitting it, and a run that spent its last turns polishing one frame
+         never delivered the second — the failure mode a real card hit at 24
+         turns. Naming the number up front is what turns it into a plan. */
+      const budgetBlock = [
+        {
+          text:
+            `You have at most ${maxTurns} turns for this card, and one turn is one model response — ` +
+            'every tool call you make spends one. Spend them on the deliverable, not on ceremony: ' +
+            'one search_inspiration call is enough to choose a reference (do not run a second query "to compare"), ' +
+            'and screenshot a frame once after a batch of edits rather than after each change. ' +
+            'Aim to have your deliverable frame(s) created and reviewed by roughly two thirds of the budget, ' +
+            'so you have room to fix what the screenshot shows.',
+        },
+      ]
       if (model.runHarness) {
         const result = await model.runHarness({
           canvasId,
           prompt: kickoff,
-          system: [systemFor(role), ...guidelinesBlock.map((b) => b.text)].join('\n\n'),
+          system: [systemFor(role), ...guidelinesBlock.map((b) => b.text), ...budgetBlock.map((b) => b.text)].join('\n\n'),
           // Image generation uses a separate paid model account; the local CLI
           // connection must never imply that the user's subscription covers it.
           tools: TOOLS.filter((tool) => tool.name !== 'generate_image'),
@@ -560,7 +589,7 @@ async function runAgent(canvasId: string, agentName: string, stalled: Set<string
             () =>
               model.run({
                 maxTokens: 16000,
-                system: [{ text: systemFor(role), cache: true }, ...guidelinesBlock, ...noVisionBlock],
+                system: [{ text: systemFor(role), cache: true }, ...guidelinesBlock, ...noVisionBlock, ...budgetBlock],
                 tools: TOOLS,
                 messages,
               }),
