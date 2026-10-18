@@ -272,17 +272,52 @@ function fromCompletion(body: CompletionBody, label: string): TurnResult {
 /* ---------------------------------------------------------------- */
 
 export async function runChatCompletionsTurn(config: ChatCompletionsConfig, req: TurnRequest): Promise<TurnResult> {
-  const res = await fetch(config.url, {
+  const body = {
+    model: config.model,
+    messages: toMessages(req.system, req.messages, config.vision),
+    tools: toTools(req.tools),
+    tool_choice: 'auto',
+  }
+
+  /* `max_tokens` is deprecated and newer models reject it outright; the
+     replacement is `max_completion_tokens`. Sending only the new name breaks
+     older OpenAI-compatible servers, sending only the old name breaks current
+     OpenAI models and anything strict about it (vLLM in newer configs, some
+     Azure deployments). So send both, and if a strict endpoint rejects the
+     pair, retry once with only the field it complained about — that way one
+     configuration works across the whole roster instead of pinning the
+     operator to whichever dialect their gateway happens to speak. */
+  const withBoth = { ...body, max_tokens: req.maxTokens, max_completion_tokens: req.maxTokens }
+  let res = await fetch(config.url, {
     method: 'POST',
     headers: { ...config.headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: config.model,
-      messages: toMessages(req.system, req.messages, config.vision),
-      tools: toTools(req.tools),
-      tool_choice: 'auto',
-      max_tokens: req.maxTokens,
-    }),
+    body: JSON.stringify(withBoth),
   })
+
+  if (!res.ok && res.status === 400) {
+    const complaint = await res.text()
+    /* providers phrase this several ways: "unsupported parameter:
+       max_completion_tokens", "provide only one output token limit",
+       "Unknown parameter: 'max_tokens'". Map each to the single field that
+       will satisfy it; anything else is a real 400 and gets rethrown. */
+    const wantsNewOnly = /max_completion_tokens/i.test(complaint) || /only one output token limit/i.test(complaint)
+    const wantsOldOnly = /max_tokens/i.test(complaint) && !wantsNewOnly
+    const retryBody = wantsNewOnly
+      ? { ...body, max_completion_tokens: req.maxTokens }
+      : wantsOldOnly
+        ? { ...body, max_tokens: req.maxTokens }
+        : null
+    if (retryBody) {
+      res = await fetch(config.url, {
+        method: 'POST',
+        headers: { ...config.headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(retryBody),
+      })
+    } else {
+      throw await responseError(new Response(complaint, { status: res.status }), config.label)
+    }
+  }
+
   if (!res.ok) throw await responseError(res, config.label)
   return fromCompletion(parseCompletionBody(await res.text(), config.label), config.label)
 }
