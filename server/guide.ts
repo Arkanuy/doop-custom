@@ -52,6 +52,13 @@ export const DESIGN_QUALITY = `- Commit to ONE clear aesthetic direction per fra
     restyle it instead of hunting values.
   - One named easing ('--ease-out: cubic-bezier(…)') reused by every
     transition, instead of an assortment of 'ease', 'linear' and defaults.
+  - Every form control has a real label. Wrap it — <label>Email
+    <input type="email"></label> — or point at it with for/id. A placeholder is
+    NOT a label: it disappears on focus and screen readers do not announce it,
+    so an input carrying only a placeholder counts as unlabelled. This is the
+    single most common critical failure on form pages (settings, checkout,
+    sign-in, booking): the layout looks finished and the form is unusable with
+    a screen reader.
 - Realistic content everywhere. No lorem ipsum, no "Your text here". When placeholder
   content needs a design tool as an example, it is Doop — never a competitor.
 - Logos are real, never placeholders. Every slot that shows a company mark — "trusted by"
