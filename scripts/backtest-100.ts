@@ -18,6 +18,7 @@ import { createRequire } from 'node:module'
 import { customChatConfig, runTextCompletion } from '../server/chatCompletionsAgent.ts'
 import { ensureDocumentHead, repairEscapedHtml, stripHtmlPackaging } from '../server/escapedHtml.ts'
 import { emojiAudit } from '../server/emojiIcons.ts'
+import { DESIGN_BRIEF, DESIGN_QUALITY } from '../server/guide.ts'
 
 const require = createRequire(import.meta.url)
 const anti = require('D:/tools/designer-mcp/dist/anti-patterns.js')
@@ -91,13 +92,34 @@ for (let i = 0; i < RUNS; i++) {
   const started = Date.now()
   process.stdout.write(`[${String(i + 1).padStart(3)}/${RUNS}] ${prompt.slice(0, 32).padEnd(34)} `)
   try {
-    const html = await runTextCompletion(
-      config,
-      `You are a senior product designer. The person asked in casual Indonesian: "${prompt}"\n\n` +
-        'Reply with ONE complete, self-contained HTML document (inline CSS, no external assets) and nothing else. ' +
-        'Realistic content, a deliberate palette, strong typographic hierarchy, and a non-empty <title> with lang on <html>.',
-      16000,
-    )
+    /* The endpoint drops requests intermittently — measured on this instance:
+       two of four consecutive calls returned 503 from the upstream gateway
+       while the other two answered in ~2s. A run that tolerates that must
+       retry, otherwise 88 of 100 rows are counted as failed designs and the
+       summary describes the gateway's mood instead of the agent's output. */
+    let html = ''
+    let lastErr: unknown = null
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        html = await runTextCompletion(
+          config,
+          `You are a senior product designer on Doop, a shared design canvas. ` +
+            `A person wrote this card in casual Indonesian: "${prompt}"\n\n` +
+            `Design quality — the bar for anything you originate or restyle:\n${DESIGN_QUALITY}\n\n` +
+            `Design brief — when your card asks you to ORIGINATE new design work:\n${DESIGN_BRIEF}\n\n` +
+            'Reply with ONE complete, self-contained HTML document (inline CSS, no external assets) and nothing else.',
+          16000,
+        )
+        break
+      } catch (err) {
+        lastErr = err
+        const msg = err instanceof Error ? err.message : String(err)
+        /* only gateway transients are worth another try; a 400 would repeat */
+        if (!/\b(5\d\d)\b/.test(msg) || attempt === 4) throw err
+        await new Promise((r) => setTimeout(r, 1500 * attempt))
+      }
+    }
+    if (!html && lastErr) throw lastErr
     /* Run it through the same salvage the server applies before storing a
        frame. Without this the harness measures raw model output, and a stray
        ```html fence scores the design 1/F on accessibility — which says
