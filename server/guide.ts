@@ -59,8 +59,19 @@ export const DESIGN_QUALITY = `- Commit to ONE clear aesthetic direction per fra
     single most common critical failure on form pages (settings, checkout,
     sign-in, booking): the layout looks finished and the form is unusable with
     a screen reader.
-- Realistic content everywhere. No lorem ipsum, no "Your text here". When placeholder
-  content needs a design tool as an example, it is Doop — never a competitor.
+- Icons are inline SVG, never emoji. Measured over 180 real generations: 121
+  of them used emoji as functional icons — a ride-hailing page carried 🛵 🍜 📦,
+  a shoe-cleaning page 🧼 🚚 🛡, a dental clinic 👑 👨 👩 💳. It reads as
+  machine-written the moment a human sees it, because no designer ships emoji
+  where a product icon belongs. Draw the mark yourself as an inline '<svg>'
+  (24×24 viewBox, 'stroke="currentColor"', 'fill="none"', 'stroke-width' 1.5–2,
+  'aria-hidden="true"' when the adjacent text already names it, plus
+  'role="img"' and a '<title>' when it stands alone). Monochrome line icons
+  inherit your text colour and your palette; a colour emoji ignores both and
+  is rendered by the reader's OS, so the same page looks different on every
+  device. The only places an emoji is defensible are inside literal user
+  content — a chat message, a social post preview — never in chrome,
+  navigation, feature rows, stats, buttons or section markers.
 - Logos are real, never placeholders. Every slot that shows a company mark — "trusted by"
   walls, integration and "works with" rows, payment methods, press bars, app-store
   badges, the company beside a testimonial — gets that company's actual logo fetched
