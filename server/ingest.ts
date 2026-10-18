@@ -348,7 +348,11 @@ export async function handleIngest(req: express.Request, res: express.Response) 
       res.set('X-Doop-Synced', '1')
       return res.json({ ok: true, frameId: existing.id, frozen: true })
     }
-    if (existing.html === wrapped) {
+    /* Compare the bytes that will actually be stored, not the raw input:
+       actions.updateFrame runs the payload through normalizeIncomingHtml,
+       which can add a <head>/<title>, so comparing `wrapped` directly would
+       report "updated" on every replay of an identical capture. */
+    if (existing.html === actions.normalizeIncomingHtml(wrapped, title)) {
       /* content matches, but this capture may still carry fresher hotspots —
          e.g. the first upload from a snippet version that reports links */
       await saveLinks(key.id, page, links)

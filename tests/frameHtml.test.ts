@@ -37,7 +37,12 @@ describe('escaped HTML never reaches a frame', () => {
     await client.patch(`/api/frames/${id}`, {
       html: '&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;&lt;h1&gt;Hi&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;',
     })
-    expect(await htmlOf(id)).toBe('<!doctype html><html><body><h1>Hi</h1></body></html>')
+    /* the entity decoding is the point; the head Doop adds afterwards
+       (lang, a title from the frame name) is asserted separately */
+    const html = await htmlOf(id)
+    expect(html).toContain('<body><h1>Hi</h1></body>')
+    expect(html).toMatch(/<html lang="en">/)
+    expect(html).not.toContain('&lt;')
   })
 
   it('decodes every chunk of a stream whose opening chunk was escaped', async () => {
@@ -48,7 +53,9 @@ describe('escaped HTML never reaches a frame', () => {
     await client.post(`/api/frames/${id}/append`, { html_chunk: '&lt;body class=&quot;p&quot;&gt;' })
     await client.post(`/api/frames/${id}/append`, { html_chunk: 'plain text' })
     await client.post(`/api/frames/${id}/append`, { html_chunk: '&lt;/body&gt;&lt;/html&gt;', done: true })
-    expect(await htmlOf(id)).toBe('<!doctype html><html><body class="p">plain text</body></html>')
+    const streamed = await htmlOf(id)
+    expect(streamed).toContain('<body class="p">plain text</body>')
+    expect(streamed).not.toContain('&lt;')
   })
 
   it('leaves a raw stream untouched, escaped code samples included', async () => {
@@ -56,6 +63,11 @@ describe('escaped HTML never reaches a frame', () => {
     const doc = '<!doctype html><html><body><code>&lt;div class="card"&gt;</code></body></html>'
     await client.post(`/api/frames/${id}/append`, { html_chunk: doc.slice(0, 30), start: true })
     await client.post(`/api/frames/${id}/append`, { html_chunk: doc.slice(30), done: true })
-    expect(await htmlOf(id)).toBe(doc)
+    const html = await htmlOf(id)
+    /* the code sample's entities must survive verbatim — that is what this
+       test guards. The <head> Doop adds is orthogonal, so assert the payload
+       rather than whole-string equality. */
+    expect(html).toContain('<code>&lt;div class="card"&gt;</code>')
+    expect(html).toContain('</body></html>')
   })
 })

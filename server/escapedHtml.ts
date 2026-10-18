@@ -33,6 +33,42 @@ export function repairEscapedHtml(html: string): string {
 }
 
 /**
+ * Give a frame document the head it needs to be a document.
+ *
+ * WCAG 2.4.2 requires a non-empty `<title>`; measured against the external
+ * audit, every frame Doop produced was missing one, so the tab is blank and a
+ * screen reader names the frame nothing. `lang` on `<html>` matters for the
+ * same reason (3.1.1).
+ *
+ * Only fills what is absent or empty: a title the model wrote is the model's
+ * choice and is left alone. `fallbackTitle` is the frame's name, so the result
+ * is at least as specific as the canvas UI.
+ */
+export function ensureDocumentHead(html: string, fallbackTitle: string): string {
+  let out = html
+
+  const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(out)
+  const safeFallback = fallbackTitle.replace(/[<>&]/g, '').trim() || 'Doop frame'
+  if (titleMatch) {
+    if (!titleMatch[1]?.trim()) {
+      out = out.replace(titleMatch[0], `<title>${safeFallback}</title>`)
+    }
+  } else if (/<head[^>]*>/i.test(out)) {
+    out = out.replace(/<head([^>]*)>/i, `<head$1><title>${safeFallback}</title>`)
+  } else if (/<html[^>]*>/i.test(out)) {
+    out = out.replace(/<html([^>]*)>/i, `<html$1><head><title>${safeFallback}</title></head>`)
+  }
+
+  /* lang: only add when the attribute is entirely absent, never overwrite a
+     language the author chose */
+  if (/<html(?![^>]*\blang\b)[^>]*>/i.test(out)) {
+    out = out.replace(/<html([^>]*)>/i, '<html lang="en"$1>')
+  }
+
+  return out
+}
+
+/**
  * Strip the packaging models wrap their markdown around the document:
  * a code fence, a sentence of lead-in, or a closing commentary appended after
  * `</html>`.

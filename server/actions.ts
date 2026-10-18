@@ -12,7 +12,7 @@ import {
   roleName,
   stripMentions,
 } from '../shared/agents.ts'
-import { decodeEscapedHtml, looksEscapedHtml, repairEscapedHtml, stripHtmlPackaging } from './escapedHtml.ts'
+import { decodeEscapedHtml, ensureDocumentHead, looksEscapedHtml, repairEscapedHtml, stripHtmlPackaging } from './escapedHtml.ts'
 import { emitCanvasEvent } from './events.ts'
 import type {
   Actor,
@@ -46,9 +46,13 @@ import type {
  * would leave the MCP tools, the REST API and the UI unguarded — and measured
  * on this instance, 5 of 5 sampled model outputs arrived with some of that
  * packaging, which renders as stray text in the frame.
+ *
+ * Exported so a caller that needs to know what WILL be stored (the sync
+ * ingest, deciding whether a capture is a replay) can normalize its payload
+ * before comparing, instead of diffing against the pre-normalized input.
  */
-function normalizeIncomingHtml(html: string): string {
-  return repairEscapedHtml(stripHtmlPackaging(html))
+export function normalizeIncomingHtml(html: string, fallbackTitle: string): string {
+  return ensureDocumentHead(repairEscapedHtml(stripHtmlPackaging(html)), fallbackTitle)
 }
 
 type Broadcast = (canvasId: string, msg: ServerMessage, excludeClientId?: string) => void
@@ -1283,7 +1287,9 @@ export function appendFrameHtml(
   const tail = finishing ? piece.search(/<\/html>/i) : -1
   if (tail !== -1) piece = piece.slice(0, tail + '</html>'.length)
 
-  const html = opts.start ? piece : before.html + piece
+  let html = opts.start ? piece : before.html + piece
+  /* the head can only be judged once the document is complete */
+  if (finishing) html = ensureDocumentHead(html, before.name)
   const frame = store.updateFrame(frameId, { html }, actor.name)!
 
   if (starting) {
@@ -1330,7 +1336,7 @@ export function createFrame(
   },
   actor: Actor,
 ): Frame | undefined {
-  if (input.html !== undefined) input = { ...input, html: normalizeIncomingHtml(input.html) }
+  if (input.html !== undefined) input = { ...input, html: normalizeIncomingHtml(input.html, input.name) }
   const frame = store.createFrame(canvasId, input, actor.name)
   if (!frame) return undefined
   if (actor.kind === 'agent' && frame.html.length > 0) {
@@ -1354,7 +1360,7 @@ export function updateFrame(
 ): Frame | undefined {
   const before = store.getFrame(frameId)
   if (!before) return undefined
-  if (patch.html !== undefined) patch = { ...patch, html: normalizeIncomingHtml(patch.html) }
+  if (patch.html !== undefined) patch = { ...patch, html: normalizeIncomingHtml(patch.html, patch.name ?? before.name) }
   const prevName = before.name
   const prevHtml = before.html
   const frame = store.updateFrame(frameId, patch, actor.name)

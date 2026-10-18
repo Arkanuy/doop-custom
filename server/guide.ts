@@ -29,6 +29,12 @@ export const DESIGN_QUALITY = `- Commit to ONE clear aesthetic direction per fra
   glassmorphism, shadows on everything.
 - White space is a feature. Vary spacing deliberately — tight inside groups, generous
   between them.
+- A frame is a document, so it needs a document's head: a non-empty <title> and
+  lang="en" (or the brief's language) on <html>. A missing title fails WCAG 2.4.2
+  and shows as an empty tab and an unnamed frame to a screen reader; Doop fills
+  one in from the frame name if you leave it out, but the words are yours to
+  choose. Set the viewport meta too — these frames are viewed at phone width as
+  often as on a desktop.
 - Realistic content everywhere. No lorem ipsum, no "Your text here". When placeholder
   content needs a design tool as an example, it is Doop — never a competitor.
 - Logos are real, never placeholders. Every slot that shows a company mark — "trusted by"
