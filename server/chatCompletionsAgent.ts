@@ -395,5 +395,50 @@ function parseCompletionBody(raw: string, label: string): CompletionBody {
   return merged
 }
 
+/**
+ * A plain text completion — no tools, no message history, one prompt in and
+ * the text out.
+ *
+ * This exists so callers that are NOT the agent loop (the memory distiller)
+ * still go through the transport that negotiates the output-token field. Doing
+ * their own `fetch` is how the distiller ended up sending both `max_tokens`
+ * and `max_completion_tokens` and getting a hard 400 from a gateway that
+ * refuses the pair — the failure the agent path had already solved.
+ */
+export async function runTextCompletion(
+  config: ChatCompletionsConfig,
+  prompt: string,
+  maxTokens: number,
+): Promise<string> {
+  const body = { model: config.model, messages: [{ role: 'user', content: prompt }] }
+  let res = await fetch(config.url, {
+    method: 'POST',
+    headers: { ...config.headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, max_tokens: maxTokens, max_completion_tokens: maxTokens }),
+  })
+  if (!res.ok && res.status === 400) {
+    const complaint = await res.text()
+    const wantsNewOnly = /max_completion_tokens/i.test(complaint) || /only one output token limit/i.test(complaint)
+    const wantsOldOnly = /max_tokens/i.test(complaint) && !wantsNewOnly
+    const retryBody = wantsNewOnly
+      ? { ...body, max_completion_tokens: maxTokens }
+      : wantsOldOnly
+        ? { ...body, max_tokens: maxTokens }
+        : null
+    if (retryBody) {
+      res = await fetch(config.url, {
+        method: 'POST',
+        headers: { ...config.headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(retryBody),
+      })
+    } else {
+      throw await responseError(new Response(complaint, { status: res.status }), config.label)
+    }
+  }
+  if (!res.ok) throw await responseError(res, config.label)
+  const parsed = parseCompletionBody(await res.text(), config.label)
+  return (parsed.choices?.[0]?.message?.content ?? '').trim()
+}
+
 /* exported for tests */
 export const _internal = { toMessages, toTools, fromCompletion }

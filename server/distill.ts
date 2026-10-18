@@ -2,6 +2,8 @@ import { env } from './env.ts'
 import Anthropic from '@anthropic-ai/sdk'
 import { store } from './store.ts'
 import * as actions from './actions.ts'
+import { customChatConfig } from './chatCompletionsAgent.ts'
+import type { ChatCompletionsConfig } from './chatCompletionsAgent.ts'
 
 /**
  * The Memory distiller: when enough undistilled design decisions pile up on a
@@ -21,10 +23,61 @@ const MAX_WINDOW = 15
 
 let client: Anthropic | null = null
 
-function getClient(): Anthropic | null {
-  if (!env.ANTHROPIC_API_KEY) return null
-  if (!client) client = new Anthropic()
-  return client
+/**
+ * The model that reads decisions and writes preferences.
+ *
+ * Two transports, because a self-hosted Doop may legitimately have neither an
+ * Anthropic key nor a desire for one:
+ *
+ *  - a custom OpenAI-compatible endpoint (DOOP_AGENT_PROVIDER=custom), which is
+ *    what a self-hoster runs the whole agent on, and therefore what this should
+ *    use — the distiller used to require ANTHROPIC_API_KEY specifically, so on
+ *    a custom-endpoint instance memory silently never learned anything;
+ *  - Anthropic, for the hosted setup.
+ *
+ * Returns null when neither is configured: memory then stays a plain record of
+ * what humans asked for, without inferred rules. That is a degradation, not an
+ * error, so nothing logs on every decision.
+ */
+function distillTarget(): { kind: 'chat'; config: ChatCompletionsConfig } | { kind: 'anthropic'; client: Anthropic } | null {
+  const custom = customChatConfig()
+  if (custom) return { kind: 'chat', config: custom }
+  if (env.ANTHROPIC_API_KEY) {
+    if (!client) client = new Anthropic()
+    return { kind: 'anthropic', client }
+  }
+  return null
+}
+
+/** True when memory inference can run at all — the UI reports this. */
+export function distillerEnabled(): boolean {
+  return distillTarget() !== null
+}
+
+/** One-shot completion through whichever transport is configured. */
+async function complete(prompt: string, maxTokens: number): Promise<string> {
+  const target = distillTarget()
+  if (!target) return ''
+  if (target.kind === 'anthropic') {
+    const res = await target.client.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    return res.content
+      .filter((b): b is (typeof res.content)[number] & { type: 'text' } => b.type === 'text')
+      .map((b) => b.text)
+      .join('')
+  }
+  /* the custom endpoint speaks Chat Completions; a plain request, no tools,
+     because this is a text-in text-out rewrite.
+     The output-token field is negotiated rather than guessed: max_tokens is
+     deprecated, max_completion_tokens is refused by older servers, and some
+     gateways reject both at once ("provide only one output token limit") — the
+     same three-way split the agent transport handles, so this reuses the same
+     helper instead of re-deriving it and drifting. */
+  const { runTextCompletion } = await import('./chatCompletionsAgent.ts')
+  return runTextCompletion(target.config, prompt, maxTokens)
 }
 
 const running = new Set<string>()
@@ -33,33 +86,24 @@ const running = new Set<string>()
  *  ("more white and blue, not so claude-esque" → "Prefer white and blue…"),
  *  then check whether enough decisions accumulated to propose a rule. */
 export function onDecision(canvasId: string, decisionId: string) {
-  if (!getClient()) return
+  if (!distillTarget()) return
   summarizeDecision(canvasId, decisionId)
     .catch((err) => console.error('[distill] summarize failed', err))
     .finally(() => maybeDistill(canvasId))
 }
 
 async function summarizeDecision(canvasId: string, decisionId: string) {
-  const anthropic = getClient()
   const decision = actions.getDecisions(canvasId).find((d) => d.id === decisionId)
-  if (!anthropic || !decision || decision.summary) return
-  const res = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 100,
-    messages: [
-      {
-        role: 'user',
-        content: `Raw design feedback a human gave an agent on a shared canvas (the agent carried it out):
+  if (!distillTarget() || !decision || decision.summary) return
+  const summary = (
+    await complete(
+      `Raw design feedback a human gave an agent on a shared canvas (the agent carried it out):
 "${decision.text}"
 
 Rewrite it as ONE short, general style preference for this project's design memory. Generalize from the specific instance to the underlying taste — e.g. "make this button blue like the others" becomes "Prefer blue accent buttons". Imperative, under 90 characters, no quotes, no trailing period. Reply with the preference only.`,
-      },
-    ],
-  })
-  const summary = res.content
-    .filter((b): b is (typeof res.content)[number] & { type: 'text' } => b.type === 'text')
-    .map((b) => b.text)
-    .join(' ')
+      100,
+    )
+  )
     .trim()
     .replace(/^["“]+|["”.]+$/g, '')
     .slice(0, 120)
@@ -75,7 +119,7 @@ Rewrite it as ONE short, general style preference for this project's design memo
    lives in the judge prompt, not in a counter. Decisions are only consumed
    when a rule IS proposed, so slow-building patterns keep their evidence. */
 export function maybeDistill(canvasId: string) {
-  if (!getClient() || running.has(canvasId)) return
+  if (!distillTarget() || running.has(canvasId)) return
   if (actions.undistilledDecisions(canvasId).length === 0) return
   /* one open proposal at a time — a stack of pending cards reads as spam */
   if (actions.getProposals(canvasId).some((p) => p.status === 'pending')) return
@@ -85,36 +129,47 @@ export function maybeDistill(canvasId: string) {
     .finally(() => running.delete(canvasId))
 }
 
-const DISTILL_TOOL: Anthropic.Tool = {
-  name: 'distill_result',
-  description: 'Report whether the decisions contain a durable style rule worth adding to a guide.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      has_rule: {
-        type: 'boolean',
-        description: 'true only if a durable, recurring preference shows through — not a one-off request',
-      },
-      guide_name: {
-        type: 'string',
-        description:
-          'Slug of the guide the rule belongs in — an existing one when it fits, else a new slug (a-z, 0-9, hyphens)',
-      },
-      guide_title: { type: 'string', description: 'Pretty display name for the guide if it is new' },
-      rule: {
-        type: 'string',
-        description:
-          'The rule as one markdown bullet an agent can execute, e.g. "- Buttons: always fully rounded (border-radius: 999px)"',
-      },
-      rationale: { type: 'string', description: 'One sentence: which decisions show this and why it is a rule' },
-    },
-    required: ['has_rule'],
-  },
+/**
+ * Pull the first balanced JSON object out of a model reply.
+ *
+ * We ask for bare JSON, but a chat model may still wrap it in a sentence or a
+ * code fence — and on the custom transport there is no `tool_choice` to force
+ * a schema, so the reply is text. Scanning for the first `{` and matching
+ * braces (ignoring those inside strings) keeps the whole thing from failing
+ * over a chatty preamble.
+ */
+function extractJsonObject(text: string): unknown {
+  const start = text.indexOf('{')
+  if (start === -1) return null
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        try {
+          return JSON.parse(text.slice(start, i + 1))
+        } catch {
+          return null
+        }
+      }
+    }
+  }
+  return null
 }
 
 async function distill(canvasId: string) {
-  const anthropic = getClient()
-  if (!anthropic) return
+  if (!distillTarget()) return
   const decisions = actions.undistilledDecisions(canvasId).slice(0, MAX_WINDOW)
   if (decisions.length === 0) return
   const guides = store.getGuidelines(canvasId)
@@ -153,19 +208,18 @@ If these decisions reveal a durable style preference, distill it into ONE markdo
 - ONE decision is enough when it is stated as a standing preference — "never/always …", "keep that as our signature style", "prefer X over Y", or a general taste like "less claude-esque, more white and blue".
 - Several decisions correcting in the same direction are enough even if each was phrased as a one-off.
 - A single tweak scoped to one design ("nudge this button left", "fix this heading") is NOT a rule — report has_rule: false and wait for more evidence.
-Do not restate anything a guide already covers. Prefer an existing guide's slug; invent a new slug only when nothing fits.`
+Do not restate anything a guide already covers. Prefer an existing guide's slug; invent a new slug only when nothing fits.
+
+Reply with ONLY a JSON object, no prose and no code fence:
+{"has_rule": boolean, "guide_name": "slug-or-omit", "guide_title": "Title Case or omit", "rule": "the markdown bullet, or omit when has_rule is false", "rationale": "one short sentence, or omit"}`
 
   console.log(`[distill] run canvas=${canvasId} decisions=${decisions.length}`)
-  const res = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 1000,
-    tools: [DISTILL_TOOL],
-    tool_choice: { type: 'tool', name: 'distill_result' },
-    messages: [{ role: 'user', content: prompt }],
-  })
+  const raw = await complete(prompt, 1000)
 
-  const block = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
-  const input = (block?.input ?? {}) as {
+  /* whichever transport answered, we asked for a JSON object — take the first
+     balanced {...} so a chatty model that adds a sentence still parses */
+  const parsed = extractJsonObject(raw)
+  const input = (parsed ?? {}) as {
     has_rule?: boolean
     guide_name?: string
     guide_title?: string
