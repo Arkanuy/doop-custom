@@ -122,10 +122,35 @@ async function boot(env: Record<string, string>, reuseDir: string | undefined, t
       stopped,
       stop({ keepData }: { keepData?: boolean } = {}) {
         proc.kill()
-        if (!keepData) rmSync(dataDir, { recursive: true, force: true })
+        if (!keepData) removeDataDir(dataDir, stopped)
       },
     }
   }
+}
+
+/**
+ * Delete a test's data directory, on Windows too.
+ *
+ * `rmSync` immediately after `proc.kill()` throws EPERM there: the killed
+ * process still holds handles on the PGlite files for a moment, and Windows
+ * refuses to unlink an open file rather than deferring the delete the way
+ * POSIX does. A failed cleanup is not a test failure — the directory lives in
+ * the OS temp dir and gets swept eventually — so this waits for the exit
+ * first, retries briefly, and finally gives up quietly instead of turning a
+ * green test red.
+ */
+export function removeDataDir(dataDir: string, stopped?: Promise<void>, attempts = 5): void {
+  void (async () => {
+    if (stopped) await Promise.race([stopped, new Promise((r) => setTimeout(r, 2_000))])
+    for (let i = 0; i < attempts; i++) {
+      try {
+        rmSync(dataDir, { recursive: true, force: true })
+        return
+      } catch {
+        await new Promise((r) => setTimeout(r, 100 * (i + 1)))
+      }
+    }
+  })()
 }
 
 /** Resolves true once the child logs that it is listening on `port`, false if
@@ -155,7 +180,10 @@ export async function buildTemplate(dir: string): Promise<void> {
   server.stop({ keepData: true })
   await server.stopped
   cpSync(server.dataDir, dir, { recursive: true })
-  rmSync(server.dataDir, { recursive: true, force: true })
+  /* not rmSync directly: on Windows the just-killed server still holds handles
+     on these files, and an EPERM here aborts the whole run before a single
+     test starts (see removeDataDir) */
+  removeDataDir(server.dataDir, server.stopped)
 }
 
 /** Minimal cookie-jar client: better-auth drives everything through cookies. */
