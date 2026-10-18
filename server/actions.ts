@@ -12,7 +12,7 @@ import {
   roleName,
   stripMentions,
 } from '../shared/agents.ts'
-import { decodeEscapedHtml, looksEscapedHtml, repairEscapedHtml } from './escapedHtml.ts'
+import { decodeEscapedHtml, looksEscapedHtml, repairEscapedHtml, stripHtmlPackaging } from './escapedHtml.ts'
 import { emitCanvasEvent } from './events.ts'
 import type {
   Actor,
@@ -38,6 +38,18 @@ import type {
  * Mutations shared by the REST API and the MCP tools. Every mutation
  * appends to the canvas activity log and broadcasts to the ws room.
  */
+
+/**
+ * Every stored frame's HTML passes through here, so both repairs live at this
+ * layer: undoing escaping, and stripping the prose, code fence or closing
+ * commentary a model wraps around the document. Guarding only the agent loop
+ * would leave the MCP tools, the REST API and the UI unguarded — and measured
+ * on this instance, 5 of 5 sampled model outputs arrived with some of that
+ * packaging, which renders as stray text in the frame.
+ */
+function normalizeIncomingHtml(html: string): string {
+  return repairEscapedHtml(stripHtmlPackaging(html))
+}
 
 type Broadcast = (canvasId: string, msg: ServerMessage, excludeClientId?: string) => void
 type AgentTouch = (
@@ -1301,7 +1313,7 @@ export function createFrame(
   },
   actor: Actor,
 ): Frame | undefined {
-  if (input.html !== undefined) input = { ...input, html: repairEscapedHtml(input.html) }
+  if (input.html !== undefined) input = { ...input, html: normalizeIncomingHtml(input.html) }
   const frame = store.createFrame(canvasId, input, actor.name)
   if (!frame) return undefined
   if (actor.kind === 'agent' && frame.html.length > 0) {
@@ -1325,7 +1337,7 @@ export function updateFrame(
 ): Frame | undefined {
   const before = store.getFrame(frameId)
   if (!before) return undefined
-  if (patch.html !== undefined) patch = { ...patch, html: repairEscapedHtml(patch.html) }
+  if (patch.html !== undefined) patch = { ...patch, html: normalizeIncomingHtml(patch.html) }
   const prevName = before.name
   const prevHtml = before.html
   const frame = store.updateFrame(frameId, patch, actor.name)
