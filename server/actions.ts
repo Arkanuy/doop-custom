@@ -1265,7 +1265,24 @@ export function appendFrameHtml(
      the verdict there: a chunk mid-design can hold a legitimate `&lt;` (a code
      sample) and must never be sniffed on its own */
   const escaped = starting ? looksEscapedHtml(chunk) : (streams.get(frameId)?.escaped ?? false)
-  const piece = escaped ? decodeEscapedHtml(chunk) : chunk
+  let piece = escaped ? decodeEscapedHtml(chunk) : chunk
+  /* Streaming cannot use stripHtmlPackaging — it needs the whole document and
+     these are fragments. But the packaging lands on the ENDS: a lead-in
+     sentence and an opening fence arrive with the first chunk, the closing
+     fence and any commentary with the last. So trim on those two boundaries
+     only: drop everything before the doctype on the opening chunk, and
+     everything after `</html>` on the final one. Mid-stream chunks are left
+     alone, because a partial document legitimately has no closing tag yet. */
+  if (starting) {
+    const doctypeAt = piece.search(/<!doctype\s+html/i)
+    const htmlTagAt = piece.search(/<html(?:\s|>)/i)
+    const startAt = doctypeAt !== -1 ? doctypeAt : htmlTagAt
+    if (startAt > 0) piece = piece.slice(startAt)
+  }
+  const finishing = opts.done === true
+  const tail = finishing ? piece.search(/<\/html>/i) : -1
+  if (tail !== -1) piece = piece.slice(0, tail + '</html>'.length)
+
   const html = opts.start ? piece : before.html + piece
   const frame = store.updateFrame(frameId, { html }, actor.name)!
 
