@@ -1,49 +1,135 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Doop backtest — 100 designs</title>
+<html lang="en"><head><meta charset="utf-8"><title>Doop backtest — before / after</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  html{overflow-x:clip;background:#0b0b0c;color:#e8e8ea;font:15px/1.5 system-ui,sans-serif}
-  body{margin:0;padding:32px}
-  h1{font-size:22px;margin:0 0 6px}
-  p.lede{color:#9a9aa2;margin:0 0 28px;max-width:70ch}
-  .grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
-  figure{margin:0;background:#141416;border:1px solid #232326;border-radius:12px;overflow:hidden}
-  figcaption{padding:10px 12px;font-size:13px}
-  .meta{color:#9a9aa2;font-size:12px;margin-top:3px}
-  img{display:block;width:100%;height:auto;background:#fff}
+  html{overflow-x:clip;background:#0a0a0b;color:#e9e9ec;font:15px/1.55 system-ui,-apple-system,sans-serif}
+  body{margin:0;padding:28px 20px 60px}
+  h1{font-size:23px;margin:0 0 8px;letter-spacing:-.01em}
+  p.lede{color:#9c9ca6;margin:0 0 26px;max-width:76ch}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:34px}
+  .stat{background:#151518;border:1px solid #26262c;border-radius:11px;padding:14px 16px}
+  .stat b{display:block;font-size:13px;color:#9c9ca6;font-weight:500;margin-bottom:5px}
+  .stat span{font-size:15px}
+  .run{margin-bottom:44px}
+  h2{font-size:16px;margin:0 0 4px}
+  .runnote{color:#9c9ca6;font-size:13px;margin:0 0 16px}
+  .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(258px,1fr))}
+  figure{margin:0;background:#151518;border:1px solid #26262c;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  figure img{display:block;width:100%;height:auto;background:#fff}
+  figcaption{padding:9px 11px;font-size:12.5px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .meta{color:#9c9ca6;font-size:11.5px;white-space:nowrap}
+  .low .meta{color:#ff8b7a}
 </style></head><body>
-<h1>Doop backtest — design quality across the run</h1>
-<p class="lede">Sorted worst to best by accessibility score, so the range is visible rather than a highlight reel. Render width 420px (phone). a11y = WCAG audit score and grade; slop = anti-slop gates passed of 35.</p>
+<h1>Doop backtest — before and after the design doctrine</h1>
+<p class="lede">Same 100 prompts per column, same model, phone width (420px), sorted worst to best by accessibility score. "Before" is the harness that never sent the design doctrine — those numbers described the bare model. "After" is the doctrine Doop actually puts in the agent's prompt. Tap an image to open it full size.</p>
+<div class="stats">
+  <div class="stat"><b>Before</b><span>median a11y 88 · grade A 46% · slop 26.3/35</span></div>
+  <div class="stat"><b>After</b><span>median a11y 91 · grade A 62% · slop 29.8/35</span></div>
+</div>
+<section class="run">
+<h2>Before — no doctrine</h2>
+<p class="runnote">100 designs · showing 24 across the score range</p>
 <div class="grid">
-<figure><img src="/backtest-shots/034-halaman-pengaturan-notifikasi.png" alt="halaman pengaturan notifikasi">
-<figcaption>halaman pengaturan notifikasi<div class="meta">a11y 0F · slop 28/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/018-landing-page-klinik-gigi.png" alt="landing page klinik gigi">
-<figcaption>landing page klinik gigi<div class="meta">a11y 45D · slop 26/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/056-dashboard-stok-gudang.png" alt="dashboard stok gudang">
-<figcaption>dashboard stok gudang<div class="meta">a11y 70C · slop 26/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/039-halaman-riwayat-transaksi.png" alt="halaman riwayat transaksi">
-<figcaption>halaman riwayat transaksi<div class="meta">a11y 75B · slop 27/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/097-halaman-pemesanan-tiket-konser.png" alt="halaman pemesanan tiket konser">
-<figcaption>halaman pemesanan tiket konser<div class="meta">a11y 79B · slop 28/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/070-halaman-konfirmasi-pembayaran.png" alt="halaman konfirmasi pembayaran">
-<figcaption>halaman konfirmasi pembayaran<div class="meta">a11y 83B · slop 29/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/084-halaman-login-aplikasi-kasir.png" alt="halaman login aplikasi kasir">
-<figcaption>halaman login aplikasi kasir<div class="meta">a11y 85B · slop 26/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/083-portfolio-fotografer.png" alt="portfolio fotografer">
-<figcaption>portfolio fotografer<div class="meta">a11y 87B · slop 26/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/058-landing-page-klinik-gigi.png" alt="landing page klinik gigi">
-<figcaption>landing page klinik gigi<div class="meta">a11y 88B · slop 26/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/001-dashboard-keuangan-mobile.png" alt="dashboard keuangan mobile">
-<figcaption>dashboard keuangan mobile<div class="meta">a11y 91A · slop 24/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/037-halaman-pemesanan-tiket-konser.png" alt="halaman pemesanan tiket konser">
-<figcaption>halaman pemesanan tiket konser<div class="meta">a11y 91A · slop 27/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/099-halaman-riwayat-transaksi.png" alt="halaman riwayat transaksi">
-<figcaption>halaman riwayat transaksi<div class="meta">a11y 91A · slop 28/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/055-landing-page-aplikasi-ojek-onl.png" alt="landing page aplikasi ojek online">
-<figcaption>landing page aplikasi ojek online<div class="meta">a11y 92A · slop 25/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/064-halaman-login-aplikasi-kasir.png" alt="halaman login aplikasi kasir">
-<figcaption>halaman login aplikasi kasir<div class="meta">a11y 93A · slop 30/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/011-halaman-detail-resep-masakan.png" alt="halaman detail resep masakan">
-<figcaption>halaman detail resep masakan<div class="meta">a11y 96A · slop 27/35</div></figcaption></figure>
-<figure><img src="/backtest-shots/091-halaman-detail-resep-masakan.png" alt="halaman detail resep masakan">
-<figcaption>halaman detail resep masakan<div class="meta">a11y 96A · slop 26/35</div></figcaption></figure>
-</div></body></html>
+<figure class="low"><a href="/backtest-shots/before-034.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-034.png" alt="halaman pengaturan notifikasi"></a>
+<figcaption><span>halaman pengaturan notifikasi</span><span class="meta">0F</span></figcaption></figure>
+<figure class="low"><a href="/backtest-shots/before-018.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-018.png" alt="landing page klinik gigi"></a>
+<figcaption><span>landing page klinik gigi</span><span class="meta">45D</span></figcaption></figure>
+<figure class="low"><a href="/backtest-shots/before-024.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-024.png" alt="halaman login aplikasi kasir"></a>
+<figcaption><span>halaman login aplikasi kasir</span><span class="meta">66C</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-056.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-056.png" alt="dashboard stok gudang"></a>
+<figcaption><span>dashboard stok gudang</span><span class="meta">70C</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-008.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-008.png" alt="dashboard admin penjualan"></a>
+<figcaption><span>dashboard admin penjualan</span><span class="meta">74C</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-041.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-041.png" alt="dashboard keuangan mobile"></a>
+<figcaption><span>dashboard keuangan mobile</span><span class="meta">79B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-069.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-069.png" alt="landing page kursus online"></a>
+<figcaption><span>landing page kursus online</span><span class="meta">80B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-026.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-026.png" alt="katalog produk skincare"></a>
+<figcaption><span>katalog produk skincare</span><span class="meta">83B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-049.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-049.png" alt="landing page kursus online"></a>
+<figcaption><span>landing page kursus online</span><span class="meta">84B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-057.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-057.png" alt="halaman pemesanan tiket konser"></a>
+<figcaption><span>halaman pemesanan tiket konser</span><span class="meta">87B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-021.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-021.png" alt="dashboard keuangan mobile"></a>
+<figcaption><span>dashboard keuangan mobile</span><span class="meta">88B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-031.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-031.png" alt="halaman detail resep masakan"></a>
+<figcaption><span>halaman detail resep masakan</span><span class="meta">88B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-060.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-060.png" alt="landing page kopi"></a>
+<figcaption><span>landing page kopi</span><span class="meta">88B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-027.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-027.png" alt="halaman profil pengguna aplikasi"></a>
+<figcaption><span>halaman profil pengguna aplikasi</span><span class="meta">91A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-042.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-042.png" alt="halaman harga SaaS tiga paket"></a>
+<figcaption><span>halaman harga SaaS tiga paket</span><span class="meta">91A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-036.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-036.png" alt="dashboard stok gudang"></a>
+<figcaption><span>dashboard stok gudang</span><span class="meta">91A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-063.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-063.png" alt="portfolio fotografer"></a>
+<figcaption><span>portfolio fotografer</span><span class="meta">91A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-009.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-009.png" alt="landing page kursus online"></a>
+<figcaption><span>landing page kursus online</span><span class="meta">92A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-019.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-019.png" alt="halaman riwayat transaksi"></a>
+<figcaption><span>halaman riwayat transaksi</span><span class="meta">92A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-042.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-042.png" alt="halaman harga SaaS tiga paket"></a>
+<figcaption><span>halaman harga SaaS tiga paket</span><span class="meta">92A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-006.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-006.png" alt="katalog produk skincare"></a>
+<figcaption><span>katalog produk skincare</span><span class="meta">95A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-022.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-022.png" alt="halaman harga SaaS tiga paket"></a>
+<figcaption><span>halaman harga SaaS tiga paket</span><span class="meta">96A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-023.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-023.png" alt="portfolio fotografer"></a>
+<figcaption><span>portfolio fotografer</span><span class="meta">96A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/before-035.png" target="_blank"><img loading="lazy" src="/backtest-shots/before-035.png" alt="landing page aplikasi ojek online"></a>
+<figcaption><span>landing page aplikasi ojek online</span><span class="meta">96A</span></figcaption></figure>
+</div></section>
+<section class="run">
+<h2>After — Doop doctrine</h2>
+<p class="runnote">100 designs · showing 24 across the score range</p>
+<div class="grid">
+<figure class="low"><a href="/backtest-shots/after-091.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-091.png" alt="halaman detail resep masakan"></a>
+<figcaption><span>halaman detail resep masakan</span><span class="meta">0F</span></figcaption></figure>
+<figure class="low"><a href="/backtest-shots/after-010.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-010.png" alt="halaman konfirmasi pembayaran"></a>
+<figcaption><span>halaman konfirmasi pembayaran</span><span class="meta">31F</span></figcaption></figure>
+<figure class="low"><a href="/backtest-shots/after-016.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-016.png" alt="dashboard stok gudang"></a>
+<figcaption><span>dashboard stok gudang</span><span class="meta">50D</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-004.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-004.png" alt="halaman login aplikasi kasir"></a>
+<figcaption><span>halaman login aplikasi kasir</span><span class="meta">71C</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-045.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-045.png" alt="landing page jasa cuci sepatu"></a>
+<figcaption><span>landing page jasa cuci sepatu</span><span class="meta">71C</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-053.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-053.png" alt="halaman daftar anggota komunitas"></a>
+<figcaption><span>halaman daftar anggota komunitas</span><span class="meta">83B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-078.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-078.png" alt="landing page klinik gigi"></a>
+<figcaption><span>landing page klinik gigi</span><span class="meta">84B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-051.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-051.png" alt="halaman detail resep masakan"></a>
+<figcaption><span>halaman detail resep masakan</span><span class="meta">87B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-025.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-025.png" alt="landing page jasa cuci sepatu"></a>
+<figcaption><span>landing page jasa cuci sepatu</span><span class="meta">88B</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-048.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-048.png" alt="dashboard admin penjualan"></a>
+<figcaption><span>dashboard admin penjualan</span><span class="meta">90A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-096.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-096.png" alt="dashboard stok gudang"></a>
+<figcaption><span>dashboard stok gudang</span><span class="meta">90A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-059.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-059.png" alt="halaman riwayat transaksi"></a>
+<figcaption><span>halaman riwayat transaksi</span><span class="meta">91A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-012.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-012.png" alt="landing page bengkel motor"></a>
+<figcaption><span>landing page bengkel motor</span><span class="meta">92A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-043.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-043.png" alt="portfolio fotografer"></a>
+<figcaption><span>portfolio fotografer</span><span class="meta">92A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-024.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-024.png" alt="halaman login aplikasi kasir"></a>
+<figcaption><span>halaman login aplikasi kasir</span><span class="meta">93A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-090.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-090.png" alt="halaman konfirmasi pembayaran"></a>
+<figcaption><span>halaman konfirmasi pembayaran</span><span class="meta">93A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-000.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-000.png" alt="landing page kopi"></a>
+<figcaption><span>landing page kopi</span><span class="meta">95A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-013.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-013.png" alt="halaman daftar anggota komunitas"></a>
+<figcaption><span>halaman daftar anggota komunitas</span><span class="meta">95A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-039.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-039.png" alt="halaman riwayat transaksi"></a>
+<figcaption><span>halaman riwayat transaksi</span><span class="meta">95A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-067.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-067.png" alt="halaman profil pengguna aplikasi"></a>
+<figcaption><span>halaman profil pengguna aplikasi</span><span class="meta">95A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-079.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-079.png" alt="halaman riwayat transaksi"></a>
+<figcaption><span>halaman riwayat transaksi</span><span class="meta">95A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-086.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-086.png" alt="katalog produk skincare"></a>
+<figcaption><span>katalog produk skincare</span><span class="meta">95A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-021.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-021.png" alt="dashboard keuangan mobile"></a>
+<figcaption><span>dashboard keuangan mobile</span><span class="meta">96A</span></figcaption></figure>
+<figure class=""><a href="/backtest-shots/after-098.png" target="_blank"><img loading="lazy" src="/backtest-shots/after-098.png" alt="landing page klinik gigi"></a>
+<figcaption><span>landing page klinik gigi</span><span class="meta">96A</span></figcaption></figure>
+</div></section>
+</body></html>
